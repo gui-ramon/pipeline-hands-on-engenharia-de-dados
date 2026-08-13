@@ -1,0 +1,33 @@
+# Dados (arquitetura Medallion: bronze/silver/gold — arquivos grandes não vão pro git)
+dados/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.Python
+build/
+dist/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Variáveis de ambiente / segredos
+.env
+.env.*
+
+# Cache de ferramentas
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Sistema operacional / editor
+.DS_Store
+.vscode/
+.idea/
