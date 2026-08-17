@@ -2,6 +2,7 @@ pandas
 numpy
 pyarrow
 requests
+xlrd
 scikit-learn
 joblib
 matplotlib

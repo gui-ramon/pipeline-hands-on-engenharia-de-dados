@@ -26,11 +26,60 @@ própria sem CNPJ, etc.) a partir de características socioeconômicas —
 escolaridade, idade, região, setor de atividade, gênero e raça — e
 identificar quais fatores mais se associam a essa condição.
 
-## Fonte de dados
+## Coleta dos Dados
 
-Microdados anuais da **PNAD Contínua** (módulo Educação/Trabalho), IBGE,
-aproximadamente 3 anos recentes. Fonte única. Formato de texto de largura
-fixa + dicionário de variáveis para decodificação.
+**Objetivo**: ter dados relevantes, confiáveis e representativos do problema
+de informalidade no mercado de trabalho brasileiro.
+
+### Entregáveis
+
+| Entregável | Onde está |
+|---|---|
+| **Dataset bruto (raw data)** | `dados/bronze/<ano>/PNADC_0<trimestre><ano>.txt` — microdados de largura fixa, exatamente como recebidos do IBGE, sem nenhuma transformação. Um manifesto JSON por período (`PNADC_0<trimestre><ano>.manifest.json`) registra `source_url`, `source_file`, contagem de linhas, checksum SHA-256 e `load_timestamp`. Pasta ignorada pelo git (`.gitignore`) — dados grandes não são versionados. |
+| **Lista/documentação das fontes** | Fonte única: FTP público do IBGE, `https://ftp.ibge.gov.br/.../Pesquisa_Nacional_por_Amostra_de_Domicilios_continua/Trimestral/Microdados/`. Detalhado em [`docs/01-requisitos-funcionais.md`](docs/01-requisitos-funcionais.md) (RF-01). |
+| **Dicionário de dados** | Original do IBGE em `dados/bronze/documentacao/` (baixado junto com os dados). Subconjunto de 22 variáveis selecionadas para este projeto, com posição/tamanho/categorias, em [`docs/03-dicionario-de-dados.md`](docs/03-dicionario-de-dados.md). |
+| **Scripts/processos de coleta** | `src/ingestao/ingestao.py` (classe `Ingestao`) — download com retentativa (backoff exponencial), resolução dinâmica do nome do arquivo no índice do IBGE, extração e substituição atômica do período. Executável também célula a célula em `notebooks/01_ingestao.ipynb`, onde `ANOS`/`TRIMESTRES` são parametrizáveis sem editar o `.py`. |
+| **Critérios de seleção dos dados** | Ver abaixo. |
+
+**Critérios de seleção**: PNAD Contínua **trimestral** (não a anual/"Visita")
+porque já traz trabalho e educação no mesmo arquivo, sem precisar de uma
+segunda fonte. Período 2023-2025 (12 trimestres, todos os 4 por ano) —
+recente o suficiente para refletir o mercado de trabalho atual, com volume
+suficiente (~470-500 mil registros/trimestre) para segmentar por gênero e
+raça sem esvaziar subgrupos. Das ~420 variáveis disponíveis, 22 foram
+selecionadas por relevância direta ao problema (ver dicionário) — evitar
+"pegar tudo" pra não gerar ruído desnecessário na etapa de Silver/EDA.
+
+### Pontos de atenção
+
+- **Qualidade dos dados**: cada período tem manifesto com checksum SHA-256 e
+  contagem de linhas, permitindo detectar corrupção/incompletude
+  (RF-07/RNF-05 — reconciliação Bronze → Gold).
+- **Relevância**: seleção deliberada de 22 das ~420 variáveis (ver critérios
+  acima), em vez de ingerir o arquivo inteiro para as camadas seguintes.
+- **Viés (bias)**: a PNAD Contínua é amostra complexa (estratificada, por
+  conglomerados), não amostra aleatória simples — estatísticas descritivas
+  devem ser ponderadas pelo peso amostral `V1028` para serem representativas
+  da população (detalhado em `docs/03-dicionario-de-dados.md`). Além disso,
+  o próprio tema do projeto (recorte por gênero/raça) exige atenção a
+  subgrupos pequenos, que podem ter alta variância amostral.
+- **Volume vs. necessidade**: os 12 trimestres somam ~19GB brutos (texto de
+  largura fixa não comprimido), mas só 22 colunas serão de fato usadas —
+  volume bruto alto não significa volume útil alto.
+- **Integração de múltiplas fontes**: não se aplica — fonte única (IBGE). O
+  risco correspondente aqui é de outra natureza: o layout de colunas pode
+  variar entre revisões do dicionário ao longo dos anos; a ingestão sempre
+  baixa a versão mais recente do dicionário junto aos dados (ver RNF-01).
+- **Aspectos legais e éticos**: microdados públicos e anonimizados pelo
+  IBGE (sem identificação direta), portanto fora do escopo de dado pessoal
+  identificável da LGPD. Ainda assim, por usar raça e gênero como eixo de
+  análise, os resultados devem ser tratados como diagnóstico agregado — não
+  para inferir ou rotular indivíduos (RNF-07/RNF-11).
+- **Atualização e temporalidade**: o IBGE revisa/republica trimestres depois
+  da divulgação inicial (ex.: uma revisão de 2024-Q2 aparecida meses depois
+  da primeira publicação) — por isso a ingestão sempre baixa novamente e
+  substitui o arquivo local a cada execução, em vez de assumir que o que já
+  está no Bronze é definitivo (RNF-01).
 
 ## Modelagem (ML)
 
@@ -53,10 +102,11 @@ seguindo o ciclo:
 **ingestão → pré-processamento → análise exploratória → modelagem ML → apresentação**
 
 > Este repositório contém a **estrutura** do pipeline (classes, camadas e
-> orquestração). A lógica específica de cada etapa (parsing dos microdados da
-> PNAD Contínua, decodificação de variáveis, construção da variável-alvo de
-> informalidade e treino do modelo) está marcada com `# TODO` nos módulos em
-> `src/` e deve ser preenchida ao longo do desenvolvimento.
+> orquestração). A ingestão (RF-01) já está implementada e baixa os dados
+> reais do IBGE. As demais etapas — decodificação de variáveis (Silver),
+> construção da variável-alvo de informalidade (Gold) e treino do modelo —
+> estão marcadas com `# TODO` nos módulos em `src/` e devem ser preenchidas
+> ao longo do desenvolvimento.
 
 ## Arquitetura Medallion
 
@@ -142,9 +192,11 @@ pipeline.executar()
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
-2. Preencha os `# TODO` de `src/ingestao/`, `src/preprocessamento/`,
-   `src/transformacao/` e `src/modelagem/` de acordo com o tema/dataset do
-   projeto.
+2. A ingestão (`src/ingestao/`) já está implementada — baixa a PNAD
+   Contínua real (ver "Coleta dos Dados" acima). Falta preencher os
+   `# TODO` de `src/preprocessamento/`, `src/transformacao/`,
+   `src/analise/` e `src/modelagem/` com as regras específicas do projeto
+   (ver [dicionário de dados](docs/03-dicionario-de-dados.md)).
 3. Rode o pipeline completo:
    ```bash
    python -m src.pipeline
