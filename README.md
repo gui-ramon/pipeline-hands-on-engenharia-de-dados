@@ -1,6 +1,6 @@
 # InformalidadeBR — Predição de Trabalho Informal a partir da PNAD Contínua
 
-Atividade Final - Pós Graduação de Engenharia de Dados - Mackenzie
+Atividade Final - Pós Graduação de Engenharia de Dados - Mackenzie 
 
 ## Integrantes
 
