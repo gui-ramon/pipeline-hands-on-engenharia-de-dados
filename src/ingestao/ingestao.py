@@ -79,12 +79,17 @@ class Ingestao(Etapa):
         self.trimestres = trimestres
         self._sessao = requests.Session()
         self._sessao.headers.update(CABECALHOS)
+        self.resultados: list[ResultadoPeriodo] = []
 
-    def executar(self) -> None:
+    def executar(self) -> list[ResultadoPeriodo]:
         """Baixa o dicionário de variáveis e os microdados de cada período
         (ano/trimestre) configurado. Todo período é baixado a cada execução
         e substitui o arquivo local existente (RNF-01/RNF-02 — ver docstring
         do módulo), com retentativa em falhas de rede.
+
+        Retorna a lista de `ResultadoPeriodo` (um por ano/trimestre), também
+        disponível em `self.resultados` mesmo quando a execução levanta
+        exceção — útil para montar um resumo legível no notebook.
         """
         inicio = time.perf_counter()
         periodos = [(ano, trimestre) for ano in self.anos for trimestre in self.trimestres]
@@ -109,6 +114,7 @@ class Ingestao(Etapa):
         for indice, (ano, trimestre) in enumerate(periodos, start=1):
             logger.info("--- Periodo %d/%d: %dQ%d ---", indice, len(periodos), ano, trimestre)
             resultados.append(self._processar_periodo(ano, trimestre))
+        self.resultados = resultados
 
         duracao = time.perf_counter() - inicio
         novos = sum(1 for r in resultados if r.status == "baixado")
@@ -134,6 +140,7 @@ class Ingestao(Etapa):
         if erros:
             periodos_com_erro = [f"{r.ano}Q{r.trimestre}" for r in erros]
             raise RuntimeError(f"Falha ao baixar os períodos: {periodos_com_erro}")
+        return resultados
 
     # ------------------------------------------------------------------
     # Período (ano/trimestre)

@@ -43,6 +43,25 @@ que sustenta RF-02 (decodificação/Silver), RF-03 (variável-alvo/Gold), RF-04
 | `Trimestre` | 5 | 1 | Trimestre de referência (1-4) |
 | `UF` | 6 | 2 | Unidade da Federação |
 
+### Identificador único de registro (não são features)
+
+Chave única de pessoa/domicílio dentro de um período, convenção padrão do
+IBGE. Necessária para deduplicar corretamente — ver "Achado de validação"
+em [`docs/04-arquitetura.md`](04-arquitetura.md#9-validação-com-agentes-de-ia-aiox):
+sem esses 4 campos, uma deduplicação ingênua pelas variáveis de conteúdo
+descartava ~0,2% dos registros por período (pessoas *diferentes* que
+coincidem em todas as 22 variáveis de conteúdo, principalmente quem está
+fora da força de trabalho).
+
+| Código | Posição | Tam. | Descrição |
+|---|---|---|---|
+| `UPA` | 12 | 9 | Unidade Primária de Amostragem |
+| `V1008` | 28 | 2 | Número de seleção do domicílio |
+| `V1014` | 30 | 2 | Painel |
+| `V2003` | 91 | 2 | Número de ordem (da pessoa dentro do domicílio) |
+
+Chave completa de deduplicação: `Ano + Trimestre + UPA + V1008 + V1014 + V2003`.
+
 ### Variável-alvo — informalidade (resolve a ambiguidade do RF-01)
 
 | Código | Posição | Tam. | Descrição |
@@ -151,23 +170,26 @@ fora do escopo do hands-on).
 > métrica artificialmente e destruiria a interpretabilidade pretendida em
 > RF-06 (o modelo "aprenderia" a copiar a própria definição do alvo).
 
-## Lista consolidada (22 variáveis)
+## Lista consolidada (22 variáveis de conteúdo + 4 identificadores)
 
 ```
-Identificação:     Ano, Trimestre, UF
-Alvo:              VD4009, V4019, VD4012, VD4002
-Demográficas:      V2007, V2010, V2009
-Domicílio/família: VD2002, VD2003, V1022, V1023
-Educação:          VD3004, V3002
-Trabalho:          VD4010, VD4011, V4018, V4025, V4040, VD4031
-Peso amostral:     V1028
-Só EDA (renda):    VD4016, VD4017
+Identificação:      Ano, Trimestre, UF
+Identificador único: UPA, V1008, V1014, V2003 (não são features — só deduplicação)
+Alvo:                VD4009, V4019, VD4012, VD4002
+Demográficas:        V2007, V2010, V2009
+Domicílio/família:   VD2002, VD2003, V1022, V1023
+Educação:            VD3004, V3002
+Trabalho:            VD4010, VD4011, V4018, V4025, V4040, VD4031
+Peso amostral:       V1028
+Só EDA (renda):      VD4016, VD4017
 ```
 
 ## Resumo por etapa do pipeline
 
-- **Silver (RF-02)**: decodificar todas as 21 variáveis acima usando as
-  posições desta tabela + as categorias do `.xls`.
+- **Silver (RF-02)**: decodificar todas as 22 variáveis de conteúdo acima
+  usando as posições desta tabela + as categorias do `.xls` (decodificação
+  de rótulos ainda pendente — hoje a Silver só seleciona/limpa, mantém os
+  códigos numéricos). Os 4 identificadores servem só para deduplicar.
 - **Gold (RF-03)**: aplicar a regra de informalidade sobre `VD4009`/`V4019`
   filtrado por `VD4002`, gerando a coluna-alvo binária.
 - **EDA (RF-04)**: cruzar a taxa de informalidade com sexo, raça, região,

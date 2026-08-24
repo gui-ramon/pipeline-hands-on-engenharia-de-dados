@@ -103,10 +103,16 @@ seguindo o ciclo:
 
 > Este repositório contém a **estrutura** do pipeline (classes, camadas e
 > orquestração). A ingestão (RF-01) já está implementada e baixa os dados
-> reais do IBGE. As demais etapas — decodificação de variáveis (Silver),
-> construção da variável-alvo de informalidade (Gold) e treino do modelo —
-> estão marcadas com `# TODO` nos módulos em `src/` e devem ser preenchidas
-> ao longo do desenvolvimento.
+> reais do IBGE. O pré-processamento (RF-02) já seleciona as 22 variáveis do
+> [dicionário de dados](docs/03-dicionario-de-dados.md) (+ 4 identificadores
+> únicos de pessoa, usados só para deduplicar corretamente), trata nulos e
+> consolida todos os períodos em `dados/silver/dados_silver.parquet`
+> (**0 linhas perdidas na reconciliação** — ver [`docs/04-arquitetura.md`
+> §9](docs/04-arquitetura.md#9-validação-com-agentes-de-ia-aiox)) — falta
+> ainda decodificar os códigos em rótulos de categoria (ex.: `V2007=1` →
+> "Homem"). As demais etapas — construção da variável-alvo de informalidade
+> (Gold) e treino do modelo — estão marcadas com `# TODO` nos módulos em
+> `src/` e devem ser preenchidas ao longo do desenvolvimento.
 
 ## Arquitetura Medallion
 
@@ -117,7 +123,12 @@ seguindo o ciclo:
 | **Gold**   | `dados/gold/`  | Dataset curado com a variável-alvo de informalidade, pronto para modelagem. |
 
 > `dados/` é ignorada pelo git (ver `.gitignore`), pois arquivos de dados
-> costumam ser grandes e/ou não devem ser versionados.
+> costumam ser grandes e/ou não devem ser versionados. Para os orientadores
+> conseguirem ter uma noção visual dos dados sem rodar o pipeline, uma
+> amostra pequena da Bronze bruta (500 linhas), da Silver tratada
+> (~1.000 linhas) e o dicionário oficial do IBGE ficam versionados em
+> [`dados_amostra/`](dados_amostra/README.md) (gerados via
+> `python -m scripts.gerar_amostra`).
 
 ## Estrutura do projeto
 
@@ -140,6 +151,9 @@ seguindo o ciclo:
 │   ├── bronze/                # Dados brutos
 │   ├── silver/                # Dados limpos
 │   └── gold/                  # Dados prontos para análise/modelo
+├── dados_amostra/               # Amostra bruta + tratada + dicionário do IBGE, versionados (dados/ não é)
+├── scripts/
+│   └── gerar_amostra.py        # Gera a amostra acima a partir da Silver
 ├── docs/                       # Proposta do projeto, dicionário de dados, relatório final
 ├── dashboard/                  # Aplicação de apresentação (ex: Streamlit)
 ├── requirements.txt            # Dependências Python do projeto
@@ -193,10 +207,12 @@ pipeline.executar()
    pip install -r requirements.txt
    ```
 2. A ingestão (`src/ingestao/`) já está implementada — baixa a PNAD
-   Contínua real (ver "Coleta dos Dados" acima). Falta preencher os
-   `# TODO` de `src/preprocessamento/`, `src/transformacao/`,
-   `src/analise/` e `src/modelagem/` com as regras específicas do projeto
-   (ver [dicionário de dados](docs/03-dicionario-de-dados.md)).
+   Contínua real (ver "Coleta dos Dados" acima). O pré-processamento
+   (`src/preprocessamento/`) também já está implementado — seleciona as 22
+   variáveis, trata nulos e consolida os períodos na Silver. Falta preencher
+   os `# TODO` de `src/transformacao/`, `src/analise/` e `src/modelagem/`
+   com as regras específicas do projeto (ver [dicionário de
+   dados](docs/03-dicionario-de-dados.md)).
 3. Rode o pipeline completo:
    ```bash
    python -m src.pipeline

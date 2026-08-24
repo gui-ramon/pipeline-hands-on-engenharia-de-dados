@@ -8,7 +8,7 @@ Este arquivo serve como um índice para os documentos deste projeto
 | 1 | [Requisitos Funcionais](01-requisitos-funcionais.md) | ✅ Definido |
 | 2 | [Requisitos Não Funcionais](02-requisitos-nao-funcionais.md) | ✅ Definido |
 | 3 | [Dicionário de Dados](03-dicionario-de-dados.md) | ✅ Definido |
-| 4 | Arquitetura | ⏳ Pendente |
+| 4 | [Arquitetura](04-arquitetura.md) | ✅ Definido |
 | 5 | Matriz de Rastreabilidade de Requisitos (RTM) | ⏳ Pendente |
 | 6 | Plano de Teste de Carga | ⏳ Pendente |
 | 7 | Plano de Teste de Segurança | ⏳ Pendente |

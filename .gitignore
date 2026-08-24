@@ -31,3 +31,38 @@ env/
 .DS_Store
 .vscode/
 .idea/
+
+# Environment & Secrets (AIOX)
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Dependencies (AIOX)
+node_modules/
+node_modules
+
+# Build & Logs (AIOX)
+*.log
+logs/
+
+# IDE & OS (AIOX)
+Thumbs.db
+*.swp
+
+# AIOX Local (AIOX)
+.aiox-core/local/
+.claude/settings.local.json
+.aiox/install-log.txt
+
+# Ferramental AIOX (instalado localmente via `npx aiox-core install`,
+# não é conteúdo do projeto — ver docs/04-arquitetura.md §9)
+.aiox-core/
+.claude/
+.antigravity/
+.codex/
+.cursor/
+.gemini/
+.kimi/
+.github/
+AGENTS.md
