@@ -95,6 +95,40 @@ informalidade. Categorias:
 > alternativa mais simples de usar só `VD4012` (contribui/não contribui
 > para a previdência) como proxy binário direto.
 
+#### Como isso está implementado hoje
+
+A regra acima já está codificada em `Transformacao._classificar_informalidade`
+(`src/transformacao/transformacao.py`), rodando sobre pessoas já filtradas
+como ocupadas (`VD4002 == 1`):
+
+```python
+categoria_informal_direta = ocupados["VD4009"].isin({2, 4, 6, 10})
+empregador_ou_conta_propria = ocupados["VD4009"].isin({8, 9})
+sem_cnpj = ocupados["V4019"] != 1
+informal = categoria_informal_direta | (empregador_ou_conta_propria & sem_cnpj)
+```
+
+Rodando sobre a Silver completa (2023-2025, 12 trimestres): **2.522.338
+pessoas ocupadas (43,9% da base), taxa de informalidade de 47,6%** — número
+igual ao reportado nos boletins de EDA (Raio-X e Censo da Informalidade).
+
+**Suposição assumida** (não é um fato documentado pelo IBGE, é uma escolha
+nossa): `V4019` em branco para as categorias 8/9 conta como "sem CNPJ" (a
+condição `!= 1` já cobre nulo) — ou seja, quem não respondeu a pergunta do
+CNPJ é tratado como informal. É uma leitura conservadora; se o time preferir
+tratar não-resposta como indefinido em vez de informal, essa é a linha a
+mudar.
+
+**Onde as duas regras candidatas discordam** — exemplo real da base, útil
+pra decidir entre elas: uma pessoa com `VD4009=9` (conta-própria), `V4019=2`
+(sem CNPJ) e `VD4012=1` (contribui pra previdência). Pela regra implementada
+(VD4009+V4019), ela é **informal** (não tem CNPJ). Pelo proxy alternativo
+(só `VD4012`), ela seria **formal** (contribui pra previdência). É um caso
+plausível na vida real — autônomo que paga INSS como "contribuinte
+individual" sem ter CNPJ — e não é raro na base; antes de travar
+definitivamente qual regra vira o RF-03 oficial, vale medir quantas pessoas
+caem nesse tipo de divergência entre as duas versões.
+
 ### Features demográficas (o diferencial do projeto)
 
 | Código | Posição | Tam. | Descrição |
