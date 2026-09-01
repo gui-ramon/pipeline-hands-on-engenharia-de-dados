@@ -110,9 +110,13 @@ seguindo o ciclo:
 > (**0 linhas perdidas na reconciliação** — ver [`docs/04-arquitetura.md`
 > §9](docs/04-arquitetura.md#9-validação-com-agentes-de-ia-aiox)) — falta
 > ainda decodificar os códigos em rótulos de categoria (ex.: `V2007=1` →
-> "Homem"). As demais etapas — construção da variável-alvo de informalidade
-> (Gold) e treino do modelo — estão marcadas com `# TODO` nos módulos em
-> `src/` e devem ser preenchidas ao longo do desenvolvimento.
+> "Homem"). A transformação (RF-03) também já está implementada: filtra
+> pessoas ocupadas (`VD4002=1`) e deriva a variável-alvo `informal` a partir
+> de `VD4009`/`V4019` — **47,6% de informalidade** sobre 2.522.338 ocupados
+> na base completa 2023-2025 (regra ainda pendente de validação formal do
+> time, ver docstring de `src/transformacao/transformacao.py`). Faltam a
+> análise exploratória (RF-04) e o treino do modelo (RF-05/RF-06), marcadas
+> com `# TODO` nos módulos em `src/`.
 
 ## Arquitetura Medallion
 
@@ -209,9 +213,10 @@ pipeline.executar()
 2. A ingestão (`src/ingestao/`) já está implementada — baixa a PNAD
    Contínua real (ver "Coleta dos Dados" acima). O pré-processamento
    (`src/preprocessamento/`) também já está implementado — seleciona as 22
-   variáveis, trata nulos e consolida os períodos na Silver. Falta preencher
-   os `# TODO` de `src/transformacao/`, `src/analise/` e `src/modelagem/`
-   com as regras específicas do projeto (ver [dicionário de
+   variáveis, trata nulos e consolida os períodos na Silver. A transformação
+   (`src/transformacao/`) já filtra ocupados e deriva a variável-alvo de
+   informalidade (Gold). Falta preencher os `# TODO` de `src/analise/` e
+   `src/modelagem/` com as regras específicas do projeto (ver [dicionário de
    dados](docs/03-dicionario-de-dados.md)).
 3. Rode o pipeline completo:
    ```bash
