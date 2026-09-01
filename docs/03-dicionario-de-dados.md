@@ -218,6 +218,53 @@ Peso amostral:       V1028
 Só EDA (renda):      VD4016, VD4017
 ```
 
+## Seleção de features para o modelo (evidência medida)
+
+Das 16 candidatas (exclui identificadores, o grupo-alvo e renda), medimos a
+força de associação de cada uma com `informal` na Gold completa (2.522.338
+ocupados, 2023-2025) — V de Cramér para categóricas, correlação
+ponto-bisserial (`|r|`) para numéricas. Cálculo em
+`src/analise/relatorios.py::_calcular_forca_features`, e o ranking aparece
+atualizado automaticamente na Seção 05 do boletim `dashboard/censo_informalidade.html`
+a cada vez que o pipeline reprocessa dados.
+
+| Feature | Tipo | Força | Nulo entre ocupados |
+|---|---|---|---|
+| `V4018` (tamanho do negócio) | categórica | 0,570 — forte | 19,9% |
+| `V4025` (é temporário?) | categórica | 0,460 — forte | 40,2% |
+| `VD4010` (setor de atividade) | categórica | 0,404 — forte | 0% |
+| `VD4011` (grupamento ocupacional) | categórica | 0,373 — forte | 0% |
+| `VD3004` (nível de instrução) | categórica | 0,325 — moderada | 0% |
+| `VD4031` (horas semanais) | numérica | 0,272 — moderada | 0% |
+| `V1022` (urbano/rural) | categórica | 0,255 — moderada | 0% |
+| `UF` | categórica | 0,243 — moderada | 0% |
+| `V4040` (tempo no emprego) | categórica | 0,144 — fraca | 0% |
+| `V1023` (tipo de área) | categórica | 0,135 — fraca | 0% |
+| `V2010` (raça/cor) | categórica | 0,118 — fraca | 0% |
+| `VD2002` (posição no domicílio) | categórica | 0,042 — muito fraca | 0% |
+| `V2009` (idade) | numérica | 0,042 — muito fraca | 0% |
+| `VD2003` (pessoas no domicílio) | numérica | 0,030 — muito fraca | 0% |
+| `V2007` (sexo) | categórica | 0,026 — muito fraca | 0% |
+| `V3002` (frequenta escola) | categórica | 0,003 — nenhuma | 0% |
+
+**Decisões daí:**
+
+- **`V3002` é candidata real a excluir do modelo** — associação praticamente
+  nula com o alvo entre ocupados (quase todo mundo que trabalha responde
+  "não" pra essa pergunta, a variável quase não varia nessa população).
+- **As duas features mais fortes (`V4018`, `V4025`) são também as com mais
+  nulo** entre ocupados — reforça a recomendação de usar
+  `HistGradientBoostingClassifier` (lida com `NaN` nativamente) em vez de
+  descartar ~20-40% das linhas pra manter essas duas.
+- **`V2007` (sexo) e `V2010` (raça) entram no modelo mesmo com associação
+  fraca/muito fraca** — não é critério de exclusão aqui: RF-06 pede medir o
+  peso desses fatores via SHAP, mesmo que pequeno, não descartá-los por
+  serem estatisticamente fracos isoladamente.
+- Confirma os "achados clássicos" já citados nas seções de Trabalho acima
+  (tamanho do negócio, tempo no emprego): tamanho do negócio e setor de
+  atividade realmente lideram, com dado de 2,5 milhões de pessoas, não só
+  intuição da literatura.
+
 ## Resumo por etapa do pipeline
 
 - **Silver (RF-02)**: decodificar todas as 22 variáveis de conteúdo acima

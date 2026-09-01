@@ -4,6 +4,7 @@ pyarrow
 requests
 xlrd
 scikit-learn
+scipy
 joblib
 matplotlib
 seaborn

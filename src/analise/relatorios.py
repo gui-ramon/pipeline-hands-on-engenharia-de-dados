@@ -20,8 +20,21 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.stats import chi2_contingency
 
 ESCALA_MAX_TAXA = 0.8  # domínio do eixo Y dos gráficos de taxa (0-80%)
+
+# As 16 features candidatas discutidas com o time (exclui IDs, o grupo-
+# alvo VD4009/V4019/VD4012/VD4002, peso amostral e renda — ver
+# `docs/03-dicionario-de-dados.md`). Usado pra medir força de associação
+# com `informal` (Seção 05) e ajudar a decidir a lista final do modelo.
+FEATURES_CATEGORICAS = {
+    "UF": "UF", "V2007": "Sexo", "V2010": "Raça/cor", "V1022": "Urbano/rural",
+    "V1023": "Tipo de área", "VD2002": "Posição no domicílio", "VD3004": "Nível de instrução",
+    "V3002": "Frequenta escola", "VD4010": "Setor de atividade", "VD4011": "Grupamento ocupacional",
+    "V4018": "Tamanho do negócio", "V4025": "É temporário?", "V4040": "Tempo no emprego",
+}
+FEATURES_NUMERICAS = {"V2009": "Idade", "VD2003": "Pessoas no domicílio", "VD4031": "Horas semanais"}
 
 # Colunas numéricas descritas na Seção 02, e o rótulo exibido.
 VARS_DESCRITIVAS = {
@@ -141,6 +154,8 @@ def calcular_metricas(gold: pd.DataFrame, silver: pd.DataFrame | None = None) ->
     ]
     m["raca_rows"] = sorted(raca_rows, key=lambda r: -r["taxa"])
 
+    m["features_forca"] = _calcular_forca_features(gold)
+
     if silver is not None and not silver.empty:
         nulos_pct = (silver.isna().mean() * 100)
         m["n_silver_total"] = int(len(silver))
@@ -151,6 +166,55 @@ def calcular_metricas(gold: pd.DataFrame, silver: pd.DataFrame | None = None) ->
         ]
 
     return m
+
+
+def _calcular_forca_features(gold: pd.DataFrame) -> list[dict]:
+    """Mede a força de associação de cada feature candidata com o alvo
+    `informal`: V de Cramér para categóricas (baseado em qui-quadrado,
+    0=nenhuma associação, 1=perfeita), |r| ponto-bisserial para
+    numéricas — escalas comparáveis entre si (convenção usual: <0.1
+    muito fraca, 0.1-0.3 fraca/moderada, 0.3-0.5 moderada/forte, >0.5
+    forte). Serve pra decidir a lista final de features do modelo
+    (RF-05) com evidência, não só intuição.
+    """
+    resultados = []
+    for col, label in FEATURES_CATEGORICAS.items():
+        if col not in gold.columns:
+            continue
+        sub = gold[[col, "informal"]].dropna()
+        if sub.empty or sub[col].nunique() < 2:
+            continue
+        tabela = pd.crosstab(sub[col], sub["informal"])
+        chi2 = chi2_contingency(tabela)[0]
+        n = int(tabela.sum().sum())
+        k = min(tabela.shape) - 1
+        forca = float(np.sqrt(chi2 / (n * k))) if k > 0 else 0.0
+        resultados.append({"col": col, "label": label, "tipo": "categórica", "forca": forca, "n": n})
+
+    for col, label in FEATURES_NUMERICAS.items():
+        if col not in gold.columns:
+            continue
+        sub = gold[[col, "informal"]].dropna()
+        if sub.empty:
+            continue
+        r = float(sub[col].corr(sub["informal"].astype(int)))
+        resultados.append({"col": col, "label": label, "tipo": "numérica", "forca": abs(r), "n": len(sub)})
+
+    return sorted(resultados, key=lambda r: -r["forca"])
+
+
+def _feature_ranking_rows(rows: list[dict], escala_max: float = 0.6) -> str:
+    linhas = []
+    for r in rows:
+        largura = min(100 * r["forca"] / escala_max, 100)
+        fraca = r["forca"] < 0.05
+        classe = " thin" if fraca else ""
+        linhas.append(
+            f'<div class="hbar-row{classe}"><div class="hbar-label">{r["label"]}</div>'
+            f'<div class="hbar-track"><div class="hbar-fill" style="width:{largura:.1f}%"></div></div>'
+            f'<div class="hbar-val">{r["forca"]:.3f} · n={r["n"]:,}</div></div>'.replace(",", ".")
+        )
+    return '<div class="hbar-rows">' + "".join(linhas) + "</div>"
 
 
 # ---------------------------------------------------------------------
@@ -484,6 +548,19 @@ def renderizar_censo(m: dict) -> str:
     sexo_html = _hbar_rows(m["sexo_rows"])
     raca_html = _hbar_rows(m["raca_rows"])
 
+    ranking_html = _feature_ranking_rows(m["features_forca"])
+    mais_fraca = m["features_forca"][-1] if m["features_forca"] else None
+    nota_fraca = (
+        f'<p class="panel-caption">Menor associação do lote: <b>{mais_fraca["label"]}</b> (V={mais_fraca["forca"]:.3f}) — '
+        f'candidata a excluir do modelo se continuar assim com mais dado.</p>'
+        if mais_fraca and mais_fraca["forca"] < 0.02 else ""
+    )
+    secao_features = f'''<section class="block">
+        <div class="sec-head"><span class="sec-num">05</span><h2>Seleção de features para o modelo</h2></div>
+        <p class="sec-intro">Força de associação de cada feature candidata com a informalidade — V de Cramér para categóricas, correlação ponto-bisserial (|r|) para numéricas. Sexo e raça entram no modelo independente da força medida aqui (RF-06 pede medir o peso delas via SHAP, não descartá-las por serem fracas).</p>
+        <div class="panel">{ranking_html}{nota_fraca}</div>
+      </section>'''
+
     secao_nulos = ""
     if "nulos_grupos" in m:
         secao_nulos = f'''<section class="block">
@@ -541,6 +618,8 @@ def renderizar_censo(m: dict) -> str:
   </section>
 
   {secao_nulos}
+
+  {secao_features}
 
   <footer>
     <div class="foot-col"><b style="color:var(--ink);">Fonte:</b> PNAD Contínua, IBGE — camada Gold do pipeline InformalidadeBR, gerada por <code>src/transformacao/transformacao.py</code>.</div>
