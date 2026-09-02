@@ -9,10 +9,11 @@ Este arquivo serve como um índice para os documentos deste projeto
 | 2 | [Requisitos Não Funcionais](02-requisitos-nao-funcionais.md) | ✅ Definido |
 | 3 | [Dicionário de Dados](03-dicionario-de-dados.md) | ✅ Definido |
 | 4 | [Arquitetura](04-arquitetura.md) | ✅ Definido |
-| 5 | Matriz de Rastreabilidade de Requisitos (RTM) | ⏳ Pendente |
-| 6 | Plano de Teste de Carga | ⏳ Pendente |
-| 7 | Plano de Teste de Segurança | ⏳ Pendente |
-| 8 | Plano de Teste de Modelagem | ⏳ Pendente |
+| 5 | [Plano de Modelagem](05-plano-de-modelagem.md) | ✅ Definido |
+| 6 | Matriz de Rastreabilidade de Requisitos (RTM) | ⏳ Pendente |
+| 7 | Plano de Teste de Carga | ⏳ Pendente |
+| 8 | Plano de Teste de Segurança | ⏳ Pendente |
+| 9 | Plano de Teste de Modelagem | ⏳ Pendente |
 
 ## Ordem sugerida de leitura/elaboração
 
@@ -24,8 +25,11 @@ Este arquivo serve como um índice para os documentos deste projeto
 3. **Arquitetura** — como o pipeline local (ingestão → Bronze/Silver/Gold →
    modelagem → dashboard) atende aos RF/RNF, com revisão de táticas
    arquiteturais (AIOX, baseado em Len Bass).
-4. **RTM** — rastreia cada RF/RNF até o código/teste que o implementa/valida.
-5. **Planos de Teste** (Carga, Segurança, Modelagem) — como cada categoria de
+4. **Plano de Modelagem** — quais algoritmos e quais features entram no
+   RF-05/RF-06, com justificativa baseada na evidência da EDA (RF-04), não
+   em intuição.
+5. **RTM** — rastreia cada RF/RNF até o código/teste que o implementa/valida.
+6. **Planos de Teste** (Carga, Segurança, Modelagem) — como cada categoria de
    risco é verificada antes da entrega final.
 
 > Este projeto roda **100% local** (sem AWS/cloud): dados públicos do IBGE,
