@@ -18,6 +18,8 @@ Usado por:
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 from scipy.stats import chi2_contingency
@@ -57,6 +59,51 @@ LABELS_CORRELACAO = {
 
 RACA_LABELS = {1: "Branca", 2: "Preta", 3: "Amarela", 4: "Parda", 5: "Indígena", 9: "Ignorado"}
 SEXO_LABELS = {1: "Homem", 2: "Mulher"}
+
+# Rótulos oficiais (dicionário do IBGE, dados/bronze/documentacao/dicionario_
+# PNADC_microdados_trimestral.xls) para os recortes que RF-04 pede
+# explicitamente e ainda não tinham rótulo decodificado nesta etapa (a
+# Silver guarda só o código numérico — ver `src/preprocessamento`).
+VD3004_LABELS = {
+    1: "Sem instrução / menos de 1 ano de estudo", 2: "Fundamental incompleto", 3: "Fundamental completo",
+    4: "Médio incompleto", 5: "Médio completo", 6: "Superior incompleto", 7: "Superior completo",
+}
+VD4010_LABELS = {
+    1: "Agropecuária, pesca e aquicultura", 2: "Indústria geral", 3: "Construção",
+    4: "Comércio e reparação de veículos", 5: "Transporte, armazenagem e correio",
+    6: "Alojamento e alimentação", 7: "Informação, finanças, imóveis e serv. profissionais",
+    8: "Administração pública, defesa e seguridade", 9: "Educação, saúde e serviços sociais",
+    10: "Outros serviços", 11: "Serviços domésticos", 12: "Atividades mal definidas",
+}
+VD4011_LABELS = {
+    1: "Diretores e gerentes", 2: "Profissionais das ciências e intelectuais",
+    3: "Técnicos de nível médio", 4: "Apoio administrativo",
+    5: "Serviços, vendedores do comércio", 6: "Agropecuária, floresta, caça e pesca",
+    7: "Construção, artes mecânicas e ofícios", 8: "Operadores de instalações e máquinas",
+    9: "Ocupações elementares", 10: "Forças armadas e policiais", 11: "Ocupações mal definidas",
+}
+V4018_LABELS = {1: "1–5 pessoas", 2: "6–10 pessoas", 3: "11–50 pessoas", 4: "51+ pessoas"}
+V4040_LABELS = {1: "Menos de 1 mês", 2: "1 mês – 1 ano", 3: "1 – 2 anos", 4: "2+ anos"}
+
+# UF -> Região (divisão oficial do IBGE) — usada pra segmentar a taxa de
+# informalidade por região (Seção 03), um recorte que a análise isolada por
+# UF não deixa claro de tão fragmentada (27 categorias).
+REGIAO_MAP = {
+    11: "Norte", 12: "Norte", 13: "Norte", 14: "Norte", 15: "Norte", 16: "Norte", 17: "Norte",
+    21: "Nordeste", 22: "Nordeste", 23: "Nordeste", 24: "Nordeste", 25: "Nordeste",
+    26: "Nordeste", 27: "Nordeste", 28: "Nordeste", 29: "Nordeste",
+    31: "Sudeste", 32: "Sudeste", 33: "Sudeste", 35: "Sudeste",
+    41: "Sul", 42: "Sul", 43: "Sul",
+    50: "Centro-Oeste", 51: "Centro-Oeste", 52: "Centro-Oeste", 53: "Centro-Oeste",
+}
+
+# VD4002 (Condição de ocupação) só é preenchida para quem está na força de
+# trabalho e tem 14+ anos — código 1 (ocupados) já vira a Gold, ver
+# `Transformacao`; usado aqui para reconstruir o funil de exclusão da Seção
+# 00 a partir da Silver/amostra completa (antes do filtro de ocupados).
+CODIGO_OCUPADO = 1
+CODIGO_DESOCUPADO = 2
+IDADE_MINIMA_FORCA_TRABALHO = 14
 
 # Grupos de variáveis pra Seção 04 (percentual de nulo) — precisa da
 # Silver (não só da Gold, que já veio filtrada) pra calcular corretamente
@@ -142,17 +189,21 @@ def calcular_metricas(gold: pd.DataFrame, silver: pd.DataFrame | None = None) ->
             pb[col] = float(sub[col].corr(sub["informal"].astype(int)))
     m["ponto_bisserial"] = pb
 
-    sexo = gold.groupby("V2007").agg(n=("informal", "size"), taxa=("informal", "mean")).reset_index()
-    m["sexo_rows"] = [
-        {"label": SEXO_LABELS.get(int(r["V2007"]), str(r["V2007"])), "n": int(r["n"]), "taxa": float(r["taxa"])}
-        for _, r in sexo.iterrows()
-    ]
-    raca = gold.groupby("V2010").agg(n=("informal", "size"), taxa=("informal", "mean")).reset_index()
-    raca_rows = [
-        {"label": RACA_LABELS.get(int(r["V2010"]), str(r["V2010"])), "n": int(r["n"]), "taxa": float(r["taxa"])}
-        for _, r in raca.iterrows()
-    ]
-    m["raca_rows"] = sorted(raca_rows, key=lambda r: -r["taxa"])
+    m["sexo_rows"] = _sexo_rows(gold)
+    m["raca_rows"] = _raca_rows(gold)
+    m["regiao_rows"] = _regiao_rows(gold)
+    m["segmentacao_por_ano"] = _segmentacao_por_ano(gold, m["sexo_rows"], m["raca_rows"], m["regiao_rows"])
+
+    # Recortes adicionais exigidos por RF-04 (escolaridade, setor, ocupação,
+    # tamanho do negócio, tempo no emprego) — não entram no filtro por ano
+    # (JS), só na visão agregada do período inteiro.
+    m["escolaridade_rows"] = _categoria_rows(gold, "VD3004", VD3004_LABELS, ordenar_por_codigo=True)
+    m["setor_rows"] = _categoria_rows(gold, "VD4010", VD4010_LABELS)
+    m["ocupacao_rows"] = _categoria_rows(gold, "VD4011", VD4011_LABELS)
+    m["tamanho_negocio_rows"] = _categoria_rows(gold, "V4018", V4018_LABELS, ordenar_por_codigo=True)
+    m["tempo_emprego_rows"] = _categoria_rows(gold, "V4040", V4040_LABELS, ordenar_por_codigo=True)
+
+    m["renda_gap"] = _calcular_renda_gap(gold)
 
     m["features_forca"] = _calcular_forca_features(gold)
 
@@ -164,8 +215,151 @@ def calcular_metricas(gold: pd.DataFrame, silver: pd.DataFrame | None = None) ->
             for nome, cols in GRUPOS_NULOS
             if all(c in nulos_pct.index for c in cols)
         ]
+        if "V2009" in silver.columns and "VD4002" in silver.columns:
+            m["funil"] = _calcular_funil(silver)
 
     return m
+
+
+def _sexo_rows(df: pd.DataFrame) -> list[dict]:
+    sexo = df.groupby("V2007").agg(n=("informal", "size"), taxa=("informal", "mean")).reset_index()
+    return [
+        {"label": SEXO_LABELS.get(int(r["V2007"]), str(r["V2007"])), "n": int(r["n"]), "taxa": float(r["taxa"])}
+        for _, r in sexo.iterrows()
+    ]
+
+
+def _raca_rows(df: pd.DataFrame) -> list[dict]:
+    raca = df.groupby("V2010").agg(n=("informal", "size"), taxa=("informal", "mean")).reset_index()
+    rows = [
+        {"label": RACA_LABELS.get(int(r["V2010"]), str(r["V2010"])), "n": int(r["n"]), "taxa": float(r["taxa"])}
+        for _, r in raca.iterrows()
+    ]
+    return sorted(rows, key=lambda r: -r["taxa"])
+
+
+def _categoria_rows(
+    df: pd.DataFrame, coluna: str, labels: dict | None = None, ordenar_por_codigo: bool = False
+) -> list[dict]:
+    """Taxa de informalidade por categoria de uma variável qualquer — usado
+    pelos recortes de escolaridade, setor, ocupação, tamanho do negócio e
+    tempo no emprego que RF-04 pede explicitamente (ver
+    `docs/01-requisitos-funcionais.md`), além de sexo/raça/região.
+    `ordenar_por_codigo=True` mantém a ordem natural de variáveis ordinais
+    (ex.: escolaridade crescente) em vez de ordenar pela taxa.
+    """
+    if coluna not in df.columns:
+        return []
+    sub = df[[coluna, "informal"]].dropna()
+    if sub.empty:
+        return []
+    grupo = sub.groupby(coluna).agg(n=("informal", "size"), taxa=("informal", "mean")).reset_index()
+    rows = [
+        {
+            "label": (labels or {}).get(int(r[coluna]), str(int(r[coluna]))),
+            "n": int(r["n"]),
+            "taxa": float(r["taxa"]),
+            "codigo": int(r[coluna]),
+        }
+        for _, r in grupo.iterrows()
+    ]
+    return sorted(rows, key=lambda r: r["codigo"]) if ordenar_por_codigo else sorted(rows, key=lambda r: -r["taxa"])
+
+
+def _calcular_renda_gap(gold: pd.DataFrame) -> dict | None:
+    """Compara renda habitual (`VD4016`) entre formais e informais — a
+    variável não entra como feature (data leakage, ver
+    `docs/03-dicionario-de-dados.md`), mas o gap salarial é o contexto
+    econômico que RF-04 pede mostrar mesmo sem virar preditor.
+    """
+    if "VD4016" not in gold.columns:
+        return None
+    sub = gold[["VD4016", "informal"]].dropna()
+    if sub.empty:
+        return None
+    grupos: dict = {}
+    for valor, chave in [(False, "formal"), (True, "informal")]:
+        serie = sub.loc[sub["informal"] == valor, "VD4016"]
+        if serie.empty:
+            continue
+        grupos[chave] = {"n": int(len(serie)), "media": float(serie.mean()), "mediana": float(serie.median())}
+    return grupos if len(grupos) == 2 else None
+
+
+def _regiao_rows(df: pd.DataFrame) -> list[dict]:
+    """Taxa de informalidade por região (agrega as 27 UFs em 5 regiões) —
+    segmentação explícita que a matriz de correlação e o ranking de
+    features (que trata UF como uma única variável de 27 categorias) não
+    deixam visível.
+    """
+    sub = df[["UF", "informal"]].dropna().copy()
+    sub["regiao"] = sub["UF"].astype(int).map(REGIAO_MAP)
+    sub = sub.dropna(subset=["regiao"])
+    grupo = sub.groupby("regiao").agg(n=("informal", "size"), taxa=("informal", "mean")).reset_index()
+    rows = [{"label": r["regiao"], "n": int(r["n"]), "taxa": float(r["taxa"])} for _, r in grupo.iterrows()]
+    return sorted(rows, key=lambda r: -r["taxa"])
+
+
+def _segmentacao_por_ano(
+    gold: pd.DataFrame, sexo_rows_todos: list[dict], raca_rows_todos: list[dict], regiao_rows_todos: list[dict]
+) -> dict:
+    """Recorta sexo/raça/região por ano — dado embarcado no HTML e lido por
+    JS para o filtro "Ano" da Seção 03, sem precisar de backend. `"todos"`
+    reaproveita as linhas já calculadas sobre a Gold inteira (evita
+    recalcular a mesma coisa duas vezes).
+    """
+    resultado = {
+        "todos": {
+            "n_ocupados": int(len(gold)),
+            "taxa_geral": float(gold["informal"].mean()),
+            "sexo_rows": sexo_rows_todos,
+            "raca_rows": raca_rows_todos,
+            "regiao_rows": regiao_rows_todos,
+        }
+    }
+    for ano in sorted(gold["Ano"].dropna().unique().tolist()):
+        sub = gold[gold["Ano"] == ano]
+        resultado[str(int(ano))] = {
+            "n_ocupados": int(len(sub)),
+            "taxa_geral": float(sub["informal"].mean()),
+            "sexo_rows": _sexo_rows(sub),
+            "raca_rows": _raca_rows(sub),
+            "regiao_rows": _regiao_rows(sub),
+        }
+    return resultado
+
+
+def _calcular_funil(silver: pd.DataFrame) -> dict:
+    """Reconstrói, a partir da Silver (ou amostra) completa — antes do
+    filtro de ocupados que gera a Gold —, quem fica de fora da análise e
+    por quê. `VD4002` só é preenchido para quem tem 14+ anos e está na
+    força de trabalho (ver dicionário oficial da PNAD); por isso o grupo
+    "fora da força de trabalho" abaixo é uma aproximação por exclusão
+    (14+ com `VD4002` nulo), não vem de uma variável dedicada — a Silver
+    não ingere `VD4001` (força de trabalho), que discriminaria com
+    precisão. Ver Seção 00 do boletim.
+    """
+    total = len(silver)
+    menor_14 = silver["V2009"] < IDADE_MINIMA_FORCA_TRABALHO
+    adultos = silver.loc[~menor_14]
+
+    def _resumo(sub: pd.DataFrame, n_total_base: int, label: str) -> dict:
+        n = len(sub)
+        return {
+            "label": label,
+            "n": n,
+            "pct_total": round(100 * n / n_total_base, 1) if n_total_base else 0.0,
+            "pct_mulheres": float((sub["V2007"] == 2).mean()) if n and "V2007" in sub.columns else None,
+            "idade_media": float(sub["V2009"].mean()) if n else None,
+        }
+
+    grupos = [
+        _resumo(silver.loc[menor_14], total, f"Menor de {IDADE_MINIMA_FORCA_TRABALHO} anos (fora do universo da pergunta)"),
+        _resumo(adultos.loc[adultos["VD4002"].isna()], total, "Fora da força de trabalho (14+ anos — aprox. por exclusão)"),
+        _resumo(adultos.loc[adultos["VD4002"] == CODIGO_DESOCUPADO], total, "Desocupados — buscando trabalho"),
+        _resumo(adultos.loc[adultos["VD4002"] == CODIGO_OCUPADO], total, "Ocupados — população analisada a partir daqui"),
+    ]
+    return {"total": total, "grupos": grupos}
 
 
 def _calcular_forca_features(gold: pd.DataFrame) -> list[dict]:
@@ -347,6 +541,273 @@ def _null_rows(grupos: list[dict]) -> str:
     return '<div class="null-rows">' + "".join(linhas) + "</div>"
 
 
+def _renda_gap_html(renda_gap: dict) -> str:
+    linhas = []
+    for chave, titulo in [("formal", "Formal"), ("informal", "Informal")]:
+        g = renda_gap.get(chave)
+        if not g:
+            continue
+        n_fmt = f'{g["n"]:,}'.replace(",", ".")
+        media_fmt = f'{g["media"]:,.0f}'.replace(",", ".")
+        mediana_fmt = f'{g["mediana"]:,.0f}'.replace(",", ".")
+        linhas.append(f'<tr><td>{titulo}</td><td>{n_fmt}</td><td>R$ {media_fmt}</td><td>R$ {mediana_fmt}</td></tr>')
+    tabela = f'''<table class="data">
+      <thead><tr><th>Grupo</th><th>N</th><th>Renda média</th><th>Renda mediana</th></tr></thead>
+      <tbody>{"".join(linhas)}</tbody>
+    </table>'''
+    formal, informal = renda_gap.get("formal"), renda_gap.get("informal")
+    caption = ""
+    if formal and informal and formal["mediana"]:
+        gap_pct = 100 * (formal["mediana"] - informal["mediana"]) / formal["mediana"]
+        caption = (
+            f'<p class="panel-caption">Quem é informal ganha, em mediana, <b>{gap_pct:.0f}% menos</b> que quem é '
+            f'formal — contexto econômico do problema, não feature do modelo (data leakage; ver '
+            f'<code>docs/03-dicionario-de-dados.md</code>).</p>'
+        )
+    return f'''<div class="panel" style="margin-left:0;">
+        <div class="panel-head"><div class="panel-title">Renda: gap salarial formal x informal</div><div class="panel-note">rendimento habitual (VD4016)</div></div>
+        {tabela}{caption}
+      </div>'''
+
+
+def _highlights_html(m: dict) -> str:
+    """Resumo executivo no topo do boletim — o que a EDA já responde, antes
+    de qualquer gráfico. RF-05/RF-06 (modelo + SHAP) devem confirmar estes
+    pontos com evidência mais forte, não descobri-los do zero.
+    """
+    bullets = []
+    n_fmt = f'{m["n_ocupados"]:,}'.replace(",", ".")
+    bullets.append(
+        f'Taxa geral de informalidade: <b>{m["taxa_geral"]*100:.1f}%</b> entre {n_fmt} pessoas ocupadas '
+        f'({m["ano_min"]}–{m["ano_max"]}).'
+    )
+
+    forca = m.get("features_forca") or []
+    if forca:
+        top = forca[0]
+        bullets.append(
+            f'<b>{top["label"]}</b> é a variável isolada mais associada à informalidade (força={top["forca"]:.2f}, '
+            f'Seção 05) — candidata a maior peso no modelo.'
+        )
+
+    regiao = m.get("regiao_rows") or []
+    if len(regiao) >= 2:
+        maior, menor = regiao[0], regiao[-1]
+        gap = 100 * (maior["taxa"] - menor["taxa"])
+        bullets.append(
+            f'<b>{maior["label"]}</b> ({maior["taxa"]*100:.1f}%) tem informalidade {gap:.0f} pontos percentuais maior '
+            f'que <b>{menor["label"]}</b> ({menor["taxa"]*100:.1f}%) — a variação regional supera a por sexo.'
+        )
+
+    renda_gap = m.get("renda_gap")
+    if renda_gap and renda_gap.get("formal") and renda_gap.get("informal") and renda_gap["formal"]["mediana"]:
+        f_, i_ = renda_gap["formal"], renda_gap["informal"]
+        gap_pct = 100 * (f_["mediana"] - i_["mediana"]) / f_["mediana"]
+        bullets.append(f'Trabalhadores informais ganham, em mediana, <b>{gap_pct:.0f}% menos</b> que formais (Seção 02).')
+
+    if m.get("tendencia_disponivel") and abs(m["tendencia_delta_pp"]) >= 0.5:
+        delta = m["tendencia_delta_pp"]
+        direcao = "queda" if delta < 0 else "alta"
+        bullets.append(f'Tendência do primeiro ao último ano da base: <b>{direcao} de {abs(delta):.1f} ponto(s) percentuais</b>.')
+
+    funil = m.get("funil")
+    if funil:
+        ocupados = next((g for g in funil["grupos"] if g["label"].startswith("Ocupados")), None)
+        if ocupados:
+            bullets.append(
+                f'A análise cobre <b>{ocupados["pct_total"]:.0f}%</b> da base bruta (pessoas ocupadas) — Seção 00 mostra '
+                f'quem fica de fora e por quê, incluindo indício de viés de seleção por sexo.'
+            )
+
+    itens = "".join(f"<li>{b}</li>" for b in bullets)
+    return f'<div class="callout"><div class="callout-head">Principais achados — o que o modelo (RF-05/06) deve confirmar</div><ul>{itens}</ul></div>'
+
+
+def _secao_funil_html(funil: dict, base_label: str) -> str:
+    total_fmt = f'{funil["total"]:,}'.replace(",", ".")
+    return f'''<section class="block">
+        <div class="sec-head"><span class="sec-num">00</span><h2>Quem fica de fora: da base bruta à população analisada</h2></div>
+        <p class="sec-intro">Toda estatística de informalidade daqui em diante descreve só pessoas ocupadas (<code>VD4002=1</code>) — não a população total. Dos {total_fmt} registros da {base_label}, a tabela mostra cada corte aplicado e como o grupo cortado se compara, em sexo e idade, a quem segue na análise.</p>
+        <div class="panel">{_funil_table(funil)}{_funil_interpretacao(funil)}</div>
+      </section>'''
+
+
+def _secao_segmentacao_extra(m: dict) -> str:
+    """Painel de região + filtro por ano, adicionado ao final da Seção 03
+    (correlações/relações) em ambos os boletins — mesmo bloco de dados
+    (`segmentacao_por_ano`) já calculado em `calcular_metricas`.
+    """
+    anos = sorted(int(a) for a in m["segmentacao_por_ano"] if a != "todos")
+    regiao_html = _hbar_rows(m["regiao_rows"])
+    n_ocupados_fmt = f'{m["n_ocupados"]:,}'.replace(",", ".")
+    kpis_html = f'''<div class="seg-kpis">
+          <span class="kpi-mini">Ocupados no recorte: <b id="seg-kpi-n">{n_ocupados_fmt}</b></span>
+          <span class="kpi-mini">Taxa: <b id="seg-kpi-taxa">{m["taxa_geral"]*100:.1f}%</b></span>
+        </div>'''
+    return f'''{_select_ano_html(anos, kpis_html)}
+      <div class="grid-2">
+        <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por sexo</div></div><div id="panel-sexo-body">{_hbar_rows(m["sexo_rows"])}</div></div>
+        <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por cor/raça</div></div><div id="panel-raca-body">{_hbar_rows(m["raca_rows"])}</div></div>
+      </div>
+      <div class="panel" style="margin-top:22px;"><div class="panel-head"><div class="panel-title">Informalidade por região</div></div><div id="panel-regiao-body">{regiao_html}</div></div>
+      {_segmentacao_script(m["segmentacao_por_ano"])}
+      <p class="sec-intro" style="margin-top:34px;">RF-04 pede ainda os recortes abaixo — escolaridade e tamanho do negócio/tempo no emprego em ordem crescente da própria categoria (não por taxa), pra deixar visível se a tendência é monotônica.</p>
+      <div class="grid-2">
+        <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por escolaridade</div></div>{_hbar_rows(m["escolaridade_rows"])}</div>
+        <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por tamanho do negócio</div></div>{_hbar_rows(m["tamanho_negocio_rows"])}</div>
+      </div>
+      <div class="grid-2" style="margin-top:22px;">
+        <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por tempo no emprego</div></div>{_hbar_rows(m["tempo_emprego_rows"])}</div>
+        <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por grupamento ocupacional</div></div>{_hbar_rows(m["ocupacao_rows"])}</div>
+      </div>
+      <div class="panel" style="margin-top:22px;"><div class="panel-head"><div class="panel-title">Informalidade por setor de atividade</div></div>{_hbar_rows(m["setor_rows"])}</div>'''
+
+
+def _funil_table(funil: dict) -> str:
+    linhas = []
+    for g in funil["grupos"]:
+        n_fmt = f'{g["n"]:,}'.replace(",", ".")
+        pct_mulheres = f'{g["pct_mulheres"]*100:.1f}%' if g["pct_mulheres"] is not None else "—"
+        idade = f'{g["idade_media"]:.1f} anos' if g["idade_media"] is not None else "—"
+        linhas.append(
+            f'<tr><td>{g["label"]}</td><td>{n_fmt}</td><td>{g["pct_total"]:.1f}%</td>'
+            f'<td>{idade}</td><td>{pct_mulheres}</td></tr>'
+        )
+    corpo = "".join(linhas)
+    return f'''<table class="data">
+      <thead><tr><th>Grupo</th><th>N</th><th>% da base bruta</th><th>Idade média</th><th>% mulheres</th></tr></thead>
+      <tbody>{corpo}</tbody>
+    </table>'''
+
+
+def _funil_interpretacao(funil: dict) -> str:
+    """Frase interpretativa automática sobre o grupo "fora da força de
+    trabalho" — sinaliza o indício de viés de seleção por sexo direto nos
+    números, em vez de deixar só a tabela pro leitor notar sozinho.
+    """
+    fora_forca = next((g for g in funil["grupos"] if g["label"].startswith("Fora da força")), None)
+    ocupados = next((g for g in funil["grupos"] if g["label"].startswith("Ocupados")), None)
+    if not fora_forca or not ocupados or fora_forca["pct_mulheres"] is None or ocupados["pct_mulheres"] is None:
+        return ""
+    gap = 100 * (fora_forca["pct_mulheres"] - ocupados["pct_mulheres"])
+    if abs(gap) < 3:
+        return ""
+    mulheres_maioria = gap > 0
+    lado = "mulheres" if mulheres_maioria else "homens"
+    pct_fora = fora_forca["pct_mulheres"] if mulheres_maioria else (1 - fora_forca["pct_mulheres"])
+    pct_ocup = ocupados["pct_mulheres"] if mulheres_maioria else (1 - ocupados["pct_mulheres"])
+    return (
+        f'<p class="panel-caption">O grupo "fora da força de trabalho" tem <b>{pct_fora*100:.0f}% de {lado}</b>, '
+        f'contra {pct_ocup*100:.0f}% entre ocupados — '
+        f'indício de viés de seleção (quem decide entrar no mercado de trabalho já não é uma amostra aleatória da população; ver hipóteses na Seção 06).</p>'
+    )
+
+
+def _select_ano_html(anos_disponiveis: list[int], kpis_html: str = "") -> str:
+    opcoes = '<option value="todos" selected>Todos os anos</option>' + "".join(
+        f'<option value="{a}">{a}</option>' for a in anos_disponiveis
+    )
+    return f'''<div class="filtro-row">
+      <label for="filtro-ano">Filtrar segmentação por ano</label>
+      <select id="filtro-ano" onchange="aplicarFiltroAno(this.value)">{opcoes}</select>
+      {kpis_html}
+    </div>'''
+
+
+def _segmentacao_script(segmentacao_por_ano: dict) -> str:
+    """JS standalone que reconstrói sexo/raça/região por ano a partir do
+    JSON embarcado — sem backend, tudo pré-calculado em Python e só
+    trocado de exibição no cliente. Espelha `_hbar_rows` em JS.
+    """
+    dados_json = json.dumps(segmentacao_por_ano, ensure_ascii=False).replace("</", "<\\/")
+    return f'''<script>
+      const DADOS_POR_ANO = {dados_json};
+      function _fmtN(n) {{ return n.toLocaleString('pt-BR'); }}
+      function _renderHbar(rows, escalaMax) {{
+        return rows.map(r => {{
+          const largura = Math.min(100 * r.taxa / escalaMax, 100).toFixed(1);
+          const thin = r.n < 500 ? ' thin' : '';
+          return '<div class="hbar-row' + thin + '"><div class="hbar-label">' + r.label + '</div>'
+            + '<div class="hbar-track"><div class="hbar-fill" style="width:' + largura + '%"></div></div>'
+            + '<div class="hbar-val">' + (r.taxa * 100).toFixed(1) + '% \\u00b7 n=' + _fmtN(r.n) + '</div></div>';
+        }}).join('');
+      }}
+      function aplicarFiltroAno(ano) {{
+        const d = DADOS_POR_ANO[ano];
+        if (!d) return;
+        document.getElementById('seg-kpi-n').textContent = _fmtN(d.n_ocupados);
+        document.getElementById('seg-kpi-taxa').textContent = (d.taxa_geral * 100).toFixed(1) + '%';
+        document.getElementById('panel-sexo-body').innerHTML = _renderHbar(d.sexo_rows, 0.8);
+        document.getElementById('panel-raca-body').innerHTML = _renderHbar(d.raca_rows, 0.8);
+        document.getElementById('panel-regiao-body').innerHTML = _renderHbar(d.regiao_rows, 0.8);
+      }}
+    </script>'''
+
+
+def _hipoteses_html(m: dict) -> str:
+    """Hipóteses para orientar a modelagem futura (RF-05/RF-06) — cada
+    bullet é derivado dos números já calculados nesta mesma execução, não
+    inventado à parte, pra continuar batendo com o dado se ele mudar.
+    """
+    bullets = []
+
+    forca = m.get("features_forca") or []
+    if len(forca) >= 2:
+        top2 = forca[:2]
+        nomes = " e ".join(f'<b>{f["label"]}</b>' for f in top2)
+        bullets.append(
+            f'{nomes} lideram a associação isolada com informalidade (Seção 05) — hipótese: a '
+            f'<b>interação entre as duas</b> (ex.: porte do negócio dentro de cada setor) pode ter poder '
+            f'preditivo maior que as variáveis somadas separadamente; vale testar como feature composta no modelo.'
+        )
+
+    regiao = m.get("regiao_rows") or []
+    if len(regiao) >= 2:
+        maior, menor = regiao[0], regiao[-1]
+        gap = 100 * (maior["taxa"] - menor["taxa"])
+        if gap >= 3:
+            bullets.append(
+                f'A taxa de informalidade varia <b>{gap:.0f} pontos percentuais</b> entre <b>{maior["label"]}</b> '
+                f'({maior["taxa"]*100:.1f}%) e <b>{menor["label"]}</b> ({menor["taxa"]*100:.1f}%) — hipótese: fatores '
+                f'estruturais regionais (setor predominante, urbanização) explicam parte do gap; região pode valer '
+                f'como termo de interação com setor/ocupação, não só como variável aditiva.'
+            )
+
+    funil = m.get("funil")
+    if funil:
+        fora_forca = next((g for g in funil["grupos"] if g["label"].startswith("Fora da força")), None)
+        ocupados = next((g for g in funil["grupos"] if g["label"].startswith("Ocupados")), None)
+        if fora_forca and ocupados and fora_forca["pct_mulheres"] and ocupados["pct_mulheres"]:
+            if fora_forca["pct_mulheres"] - ocupados["pct_mulheres"] > 0.03:
+                bullets.append(
+                    'Mulheres estão sobrerrepresentadas entre quem está fora da força de trabalho (Seção 00) — '
+                    'hipótese de <b>viés de seleção</b>: se decidir participar do mercado formal/informal já '
+                    'correlaciona com sexo antes mesmo de alguém ser "ocupado", a taxa de informalidade por sexo '
+                    'medida aqui (Seção 03) pode subestimar a exposição real de mulheres à informalidade se '
+                    'elas só entram no mercado sob condições mais restritas.'
+                )
+
+    if m.get("tendencia_disponivel"):
+        delta = m["tendencia_delta_pp"]
+        if abs(delta) >= 1:
+            direcao = "queda" if delta < 0 else "alta"
+            bullets.append(
+                f'A taxa caiu/subiu {abs(delta):.1f} ponto(s) percentuais entre o primeiro e o último ano da base '
+                f'(<b>{direcao}</b>) — hipótese a validar com mais trimestres: tendência real de mercado de '
+                f'trabalho, ou efeito de composição (ex.: setores que mais cresceram no período têm taxa própria '
+                f'diferente da média)?'
+            )
+
+    bullets.append(
+        'Renda (<code>VD4016</code>/<code>VD4017</code>) não entra como feature (data leakage — ver '
+        '<code>docs/03-dicionario-de-dados.md</code>), mas o gap salarial formal x informal é um bom '
+        'gráfico de contexto para uma futura análise descritiva, não preditiva.'
+    )
+
+    itens = "".join(f"<li>{b}</li>" for b in bullets)
+    return f'<div class="callout"><div class="callout-head">Hipóteses para orientar a modelagem (RF-05/RF-06)</div><ul>{itens}</ul></div>'
+
+
 CSS = """
   :root{color-scheme:light;--bg:#f2f4f7;--surface:#ffffff;--surface-2:#eaeef3;--ink:#10131a;--ink-2:#454a58;--ink-muted:#767b8a;--border:rgba(16,19,26,.11);--border-strong:rgba(16,19,26,.18);--accent:#2a78d6;--accent-ink:#164a90;--accent-soft-2:rgba(42,120,214,.10);--negative:#c8302f;--aqua:#0f8f63;--shadow:0 1px 2px rgba(16,19,26,.04),0 8px 24px -12px rgba(16,19,26,.18)}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0c0e12;--surface:#15171d;--surface-2:#1b1e26;--ink:#f4f5f7;--ink-2:#c6cad6;--ink-muted:#8b8f9e;--border:rgba(255,255,255,.11);--border-strong:rgba(255,255,255,.20);--accent:#4a90e8;--accent-ink:#bcd8f9;--accent-soft-2:rgba(74,144,232,.12);--negative:#e2726f;--aqua:#35b98a;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5)}}
@@ -407,6 +868,12 @@ CSS = """
   .hbar-label{font-size:.87rem;color:var(--ink-2)}.hbar-track{height:20px;background:var(--surface-2);border-radius:5px;overflow:hidden}
   .hbar-fill{height:100%;background:var(--accent);border-radius:5px}.hbar-val{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-muted);text-align:right}
   .hbar-row.thin .hbar-label,.hbar-row.thin .hbar-val{color:var(--ink-muted);font-style:italic}
+  .filtro-row{display:flex;align-items:center;gap:10px;margin:26px 0 0 calc(2ch + 18px);flex-wrap:wrap}
+  @media (max-width:760px){.filtro-row{margin-left:0}}
+  .filtro-row label{font-size:.85rem;color:var(--ink-muted)}
+  .filtro-row select{font:inherit;font-size:.86rem;color:var(--ink);background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:6px 10px}
+  .seg-kpis{display:flex;gap:26px;margin-top:4px;flex-wrap:wrap}
+  .seg-kpis .kpi-mini{font-size:.86rem;color:var(--ink-2)}.seg-kpis .kpi-mini b{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);font-size:1rem}
   .anom-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:26px;margin-left:calc(2ch + 18px)}
   @media (max-width:760px){.anom-grid{margin-left:0}}
   .anom-card{border:1px solid var(--border);border-left:3px solid var(--negative);background:var(--surface);border-radius:10px;padding:16px 18px}
@@ -430,7 +897,7 @@ def calcular_metricas_amostra(amostra: pd.DataFrame, classificar_informalidade) 
     """
     ocupados = amostra[amostra["VD4002"] == 1].copy()
     ocupados["informal"] = classificar_informalidade(ocupados)
-    return calcular_metricas(ocupados, silver=None)
+    return calcular_metricas(ocupados, silver=amostra)
 
 
 def renderizar_raiox(m: dict, n_amostra_total: int) -> str:
@@ -457,8 +924,10 @@ def renderizar_raiox(m: dict, n_amostra_total: int) -> str:
     )
     heatmap = _heatmap(m["correlacao_colunas"], m["correlacao_matriz"])
     divbars = _divbar_rows(m["ponto_bisserial"])
-    sexo_html = _hbar_rows(m["sexo_rows"])
-    raca_html = _hbar_rows(m["raca_rows"])
+    secao_funil = _secao_funil_html(m["funil"], "amostra") if m.get("funil") else ""
+    segmentacao_extra = _secao_segmentacao_extra(m)
+    highlights = _highlights_html(m)
+    renda_gap_html = _renda_gap_html(m["renda_gap"]) if m.get("renda_gap") else ""
 
     return f'''<title>Raio-X da Informalidade</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -478,7 +947,10 @@ def renderizar_raiox(m: dict, n_amostra_total: int) -> str:
       </ul>
     </div>
     {kpis}
+    {highlights}
   </header>
+
+  {secao_funil}
 
   <section class="block">
     <div class="sec-head"><span class="sec-num">01</span><h2>Padrões, tendências e sazonalidade</h2></div>
@@ -491,16 +963,15 @@ def renderizar_raiox(m: dict, n_amostra_total: int) -> str:
     <p class="sec-intro">Média, mediana, desvio-padrão e distribuição das variáveis numéricas, entre pessoas ocupadas na amostra.</p>
     <div class="stat-grid">{stat_cards}</div>
     <div class="grid-2">{hist_html}</div>
+    {renda_gap_html}
   </section>
 
   <section class="block">
-    <div class="sec-head"><span class="sec-num">03</span><h2>Correlações e relações entre atributos</h2></div>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Correlações, relações e segmentação</h2></div>
+    <p class="sec-intro">Pearson entre numéricas e ponto-bisserial com o alvo binário — mesma matemática, só muda o que entra no lugar da segunda variável. Sexo, raça/cor e região abaixo são segmentações simples (médias gerais escondem diferenças entre grupos).</p>
     <div class="panel"><div class="panel-head"><div class="panel-title">Matriz de correlação (Pearson)</div></div><div class="heat-wrap">{heatmap}</div></div>
     <div class="panel" style="margin-top:22px;"><div class="panel-head"><div class="panel-title">Correlação ponto-bisserial com informalidade</div></div>{divbars}</div>
-    <div class="grid-2">
-      <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por sexo</div></div>{sexo_html}</div>
-      <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por cor/raça</div></div>{raca_html}</div>
-    </div>
+    {segmentacao_extra}
   </section>
 
   <footer>
@@ -545,8 +1016,15 @@ def renderizar_censo(m: dict) -> str:
 
     heatmap = _heatmap(m["correlacao_colunas"], m["correlacao_matriz"])
     divbars = _divbar_rows(m["ponto_bisserial"])
-    sexo_html = _hbar_rows(m["sexo_rows"])
-    raca_html = _hbar_rows(m["raca_rows"])
+    segmentacao_extra = _secao_segmentacao_extra(m)
+    secao_funil = _secao_funil_html(m["funil"], "Silver") if m.get("funil") else ""
+    highlights = _highlights_html(m)
+    renda_gap_html = _renda_gap_html(m["renda_gap"]) if m.get("renda_gap") else ""
+    secao_hipoteses = f'''<section class="block">
+        <div class="sec-head"><span class="sec-num">06</span><h2>Hipóteses para a modelagem</h2></div>
+        <p class="sec-intro">A EDA acima já aponta direções concretas pra RF-05/RF-06 — o modelo entra para confirmar (ou refutar) estas hipóteses com evidência estatística mais forte, não para descobrir os padrões do zero.</p>
+        {_hipoteses_html(m)}
+      </section>'''
 
     ranking_html = _feature_ranking_rows(m["features_forca"])
     mais_fraca = m["features_forca"][-1] if m["features_forca"] else None
@@ -587,7 +1065,10 @@ def renderizar_censo(m: dict) -> str:
       </ul>
     </div>
     {kpis}
+    {highlights}
   </header>
+
+  {secao_funil}
 
   <section class="block">
     <div class="sec-head"><span class="sec-num">01</span><h2>Padrões, tendências e sazonalidade</h2></div>
@@ -604,22 +1085,23 @@ def renderizar_censo(m: dict) -> str:
     <p class="sec-intro">Média, mediana, desvio-padrão e distribuição das variáveis numéricas, entre pessoas ocupadas.</p>
     <div class="stat-grid">{stat_cards}</div>
     <div class="grid-2">{hist_html}</div>
+    {renda_gap_html}
   </section>
 
   <section class="block">
-    <div class="sec-head"><span class="sec-num">03</span><h2>Correlações e relações entre atributos</h2></div>
-    <p class="sec-intro">Correlação de Pearson entre numéricas, e ponto-bisserial de cada uma com a condição de informalidade.</p>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Correlações, relações e segmentação</h2></div>
+    <p class="sec-intro">Correlação de Pearson entre numéricas (mede associação linear, escala -1 a +1, fácil de comparar); ponto-bisserial de cada numérica com o alvo binário <code>informal</code> (mesma matemática de Pearson quando um dos lados é 0/1); e V de Cramér na Seção 05 para categóricas (não assume linearidade, funciona com muitas categorias como UF). Escolhidas por serem comparáveis na mesma escala e não exigirem suposição sobre a forma da relação.</p>
+    <p class="sec-intro">Segmentar por sexo, raça/cor e região é essencial aqui: a taxa geral (Seção acima) esconde diferenças que só aparecem separando os grupos — e correlação não implica causalidade em nenhum dos recortes abaixo.</p>
     <div class="panel"><div class="panel-head"><div class="panel-title">Matriz de correlação (Pearson)</div></div><div class="heat-wrap">{heatmap}</div></div>
     <div class="panel" style="margin-top:22px;"><div class="panel-head"><div class="panel-title">Correlação ponto-bisserial com informalidade</div></div>{divbars}</div>
-    <div class="grid-2">
-      <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por sexo</div></div>{sexo_html}</div>
-      <div class="panel" style="margin-left:0;"><div class="panel-head"><div class="panel-title">Informalidade por cor/raça</div></div>{raca_html}</div>
-    </div>
+    {segmentacao_extra}
   </section>
 
   {secao_nulos}
 
   {secao_features}
+
+  {secao_hipoteses}
 
   <footer>
     <div class="foot-col"><b style="color:var(--ink);">Fonte:</b> PNAD Contínua, IBGE — camada Gold do pipeline InformalidadeBR, gerada por <code>src/transformacao/transformacao.py</code>.</div>

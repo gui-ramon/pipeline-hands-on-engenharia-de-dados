@@ -276,7 +276,13 @@ a cada vez que o pipeline reprocessa dados.
 - **EDA (RF-04)**: cruzar a taxa de informalidade com sexo, raça, região,
   escolaridade, setor, grupamento ocupacional, tamanho do negócio, tempo no
   emprego e posição no domicílio; mostrar o gap de `VD4016`/`VD4017` como
-  contexto (não como feature).
+  contexto (não como feature). Todos esses recortes, mais o funil de exclusão
+  (quem fica de fora do filtro `VD4002==1` e por quê) e as hipóteses
+  derivadas para a modelagem, estão no boletim `dashboard/censo_informalidade.html`
+  (Seções 00, 02, 03, 05 e 06 — ver `src/analise/relatorios.py`). Os rótulos
+  de categoria de `VD3004`/`VD4010`/`VD4011` usados só na exibição do boletim
+  vêm do mesmo dicionário oficial do IBGE citado no topo deste documento — a
+  Silver continua guardando só o código numérico.
 - **Modelo (RF-05/RF-06)**: features = demográficas + domicílio + educação +
   região + setor + ocupação + tamanho do negócio + temporário + tempo no
   emprego + horas trabalhadas; alvo = informalidade; SHAP recortado por

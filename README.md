@@ -83,11 +83,23 @@ selecionadas por relevância direta ao problema (ver dicionário) — evitar
 
 ## Modelagem (ML)
 
-Classificação binária (formal vs. informal).
+Classificação binária (formal vs. informal), sobre as 2.522.338 pessoas
+ocupadas da Gold (2023-2025). Detalhado com justificativa em
+[`docs/05-plano-de-modelagem.md`](docs/05-plano-de-modelagem.md).
 
-- **Modelos**: Regressão Logística (baseline interpretável), Random Forest e Gradient Boosting.
-- **Avaliação**: acurácia, precisão, recall, F1 e AUC-ROC.
-- **Interpretabilidade**: camada com SHAP / importância de variáveis para revelar o peso de cada fator — com destaque para gênero e raça — na predição da informalidade.
+- **Modelos**: Regressão Logística (baseline interpretável), Random Forest
+  (com `max_samples` limitado por árvore, pra não estourar RAM em milhões de
+  linhas) e `HistGradientBoostingClassifier` (lida nativamente com categoria
+  e valor nulo — evita one-hot em `UF`/setor/ocupação e imputação nas duas
+  features mais fortes, que têm 20-40% de nulo).
+- **Split**: temporal, não aleatório — treino 2023-2024, teste 2025 (a PNAD é
+  um painel rotativo; um split aleatório vazaria a mesma pessoa entre treino
+  e teste).
+- **Avaliação**: acurácia, precisão, recall, F1 e AUC-ROC, comparadas entre
+  treino e teste (checagem de overfitting) e fatiadas por sexo/raça
+  (equidade, RNF-11).
+- **Interpretabilidade**: SHAP (`TreeExplainer`) recortado por gênero e raça
+  para revelar o peso de cada fator na predição da informalidade por grupo.
 
 ## Diferencial
 
@@ -114,9 +126,21 @@ seguindo o ciclo:
 > pessoas ocupadas (`VD4002=1`) e deriva a variável-alvo `informal` a partir
 > de `VD4009`/`V4019` — **47,6% de informalidade** sobre 2.522.338 ocupados
 > na base completa 2023-2025 (regra ainda pendente de validação formal do
-> time, ver docstring de `src/transformacao/transformacao.py`). Faltam a
-> análise exploratória (RF-04) e o treino do modelo (RF-05/RF-06), marcadas
-> com `# TODO` nos módulos em `src/`.
+> time, ver docstring de `src/transformacao/transformacao.py`). A análise
+> exploratória (RF-04) está completa — ver "Boletins de EDA" abaixo. A
+> modelagem (RF-05/RF-06, `src/modelagem/`) já está implementada e testada
+> com uma amostra pequena da base (smoke test); falta rodar oficialmente na
+> base completa (2,5M linhas) e registrar os resultados aqui.
+
+## Boletins de EDA (RF-04)
+
+Gerados automaticamente por `src/analise/relatorios.py` a cada execução do
+pipeline (ou sob demanda via `python -m scripts.gerar_boletins_eda`):
+
+| Boletim | Base | O que mostra |
+|---|---|---|
+| [`dashboard/censo_informalidade.html`](dashboard/censo_informalidade.html) | Gold completa (2,52M ocupados) | Quem fica de fora do filtro de ocupados e por quê; padrões temporais; estatísticas descritivas e gap salarial; correlações e segmentação (sexo, raça, região, escolaridade, setor, ocupação, tamanho do negócio, tempo no emprego — com filtro por ano); % de nulos; ranking de força das features; hipóteses para a modelagem. |
+| [`dashboard/raiox_informalidade.html`](dashboard/raiox_informalidade.html) | Amostra versionada (`dados_amostra/`) | Mesma leitura, em escala menor, pra quem quer entender a análise sem rodar o pipeline inteiro. |
 
 ## Arquitetura Medallion
 
@@ -154,13 +178,15 @@ seguindo o ciclo:
 ├── dados/
 │   ├── bronze/                # Dados brutos
 │   ├── silver/                # Dados limpos
-│   └── gold/                  # Dados prontos para análise/modelo
+│   ├── gold/                  # Dados prontos para análise/modelo
+│   └── modelos/               # Modelos treinados (.joblib), gráficos e relatório (gerado por Modelagem, gitignored)
 ├── dados_amostra/               # Amostra bruta + tratada + dicionário do IBGE, versionados (dados/ não é)
 ├── scripts/
-│   └── gerar_amostra.py        # Gera a amostra acima a partir da Silver
-├── docs/                       # Proposta do projeto, dicionário de dados, relatório final
-├── dashboard/                  # Aplicação de apresentação (ex: Streamlit)
-├── requirements.txt            # Dependências Python do projeto
+│   ├── gerar_amostra.py        # Gera a amostra acima a partir da Silver
+│   └── gerar_boletins_eda.py   # Regera os boletins HTML sob demanda
+├── docs/                       # Requisitos, dicionário de dados, arquitetura, plano de modelagem
+├── dashboard/                  # Boletins de EDA (HTML, gerados) + apresentação (ex: Streamlit)
+├── requirements.txt            # Dependências Python do projeto (versões fixadas)
 └── README.md
 ```
 
@@ -215,13 +241,24 @@ pipeline.executar()
    (`src/preprocessamento/`) também já está implementado — seleciona as 22
    variáveis, trata nulos e consolida os períodos na Silver. A transformação
    (`src/transformacao/`) já filtra ocupados e deriva a variável-alvo de
-   informalidade (Gold). Falta preencher os `# TODO` de `src/analise/` e
-   `src/modelagem/` com as regras específicas do projeto (ver [dicionário de
-   dados](docs/03-dicionario-de-dados.md)).
+   informalidade (Gold). A análise exploratória (`src/analise/`) já gera os
+   boletins de EDA automaticamente (ver acima). A modelagem
+   (`src/modelagem/`) já está implementada — ver [`docs/05-plano-de-
+   modelagem.md`](docs/05-plano-de-modelagem.md) para os algoritmos e
+   features usados.
 3. Rode o pipeline completo:
    ```bash
    python -m src.pipeline
    ```
    Ou explore cada etapa individualmente pelos notebooks em `notebooks/`.
+   Pra testar a modelagem numa amostra pequena antes de rodar na base
+   inteira (2,5M linhas pode levar um tempo, especialmente com tuning de
+   hiperparâmetro ligado):
+   ```python
+   from src.modelagem.modelagem import Modelagem
+   Modelagem(n_amostra=5000).executar()  # smoke test
+   Modelagem().executar()                # base completa (oficial)
+   ```
 4. Documente decisões, dicionário de dados e relatório final em `docs/`.
-5. Apresente os resultados via `dashboard/`.
+5. Apresente os resultados via `dashboard/` (boletins de EDA já prontos) e
+   `dados/modelos/` (relatório e gráficos gerados pela modelagem).
