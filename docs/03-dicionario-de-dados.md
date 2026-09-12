@@ -110,7 +110,7 @@ informal = categoria_informal_direta | (empregador_ou_conta_propria & sem_cnpj)
 
 Rodando sobre a Silver completa (2023-2025, 12 trimestres): **2.522.338
 pessoas ocupadas (43,9% da base), taxa de informalidade de 47,6%** — número
-igual ao reportado nos boletins de EDA (Raio-X e Censo da Informalidade).
+igual ao reportado no boletim de EDA (Censo da Informalidade).
 
 **Suposição assumida** (não é um fato documentado pelo IBGE, é uma escolha
 nossa): `V4019` em branco para as categorias 8/9 conta como "sem CNPJ" (a

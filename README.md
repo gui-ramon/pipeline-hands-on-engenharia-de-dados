@@ -132,15 +132,16 @@ seguindo o ciclo:
 > com uma amostra pequena da base (smoke test); falta rodar oficialmente na
 > base completa (2,5M linhas) e registrar os resultados aqui.
 
-## Boletins de EDA (RF-04)
+## Boletins (dashboard/)
 
-Gerados automaticamente por `src/analise/relatorios.py` a cada execução do
-pipeline (ou sob demanda via `python -m scripts.gerar_boletins_eda`):
+Boletins HTML standalone (abrem local, sem servidor), com a mesma linguagem
+visual — paleta, tipografia e "takeaway no topo" vêm de `src/relatorio_visual.py`,
+compartilhado pelos dois:
 
-| Boletim | Base | O que mostra |
+| Boletim | Gerado por | O que mostra |
 |---|---|---|
-| [`dashboard/censo_informalidade.html`](dashboard/censo_informalidade.html) | Gold completa (2,52M ocupados) | Quem fica de fora do filtro de ocupados e por quê; padrões temporais; estatísticas descritivas e gap salarial; correlações e segmentação (sexo, raça, região, escolaridade, setor, ocupação, tamanho do negócio, tempo no emprego — com filtro por ano); % de nulos; ranking de força das features; hipóteses para a modelagem. |
-| [`dashboard/raiox_informalidade.html`](dashboard/raiox_informalidade.html) | Amostra versionada (`dados_amostra/`) | Mesma leitura, em escala menor, pra quem quer entender a análise sem rodar o pipeline inteiro. |
+| [`dashboard/censo_informalidade.html`](dashboard/censo_informalidade.html) | `src/analise/relatorios.py` (RF-04), a cada `pipeline.analisar()` ou `python -m scripts.gerar_boletins_eda` | Do público total ao perfil do trabalhador informal: quem entra na conta (funil de ocupados) e por que a informalidade foi definida assim; tendência temporal; **retrato do informal × formal** (escolaridade, setor, região, idade, jornada, renda); onde a informalidade se concentra (barras de comparação formal × informal por sexo, raça, região, escolaridade, tempo no emprego, tamanho do negócio, setor, ocupação — com seletor por ano); ranking de força de associação das features; matriz de correlação de Pearson; % de nulos; hipóteses para a modelagem. |
+| [`dashboard/modelagem_informalidade.html`](dashboard/modelagem_informalidade.html) | `src/modelagem/relatorio.py` (RF-05/RF-06), a cada `pipeline.treinar_modelo()` | Qual dos 3 modelos escolher e por quê; comparação Accuracy/Precision/Recall/F1/AUC/tempo; **simulador de threshold** (recalcula precisão/recall/confusão ao vivo); velocidade × desempenho; overfitting (gap treino vs. teste); o que o modelo aprendeu (SHAP / coeficientes); **Model Card de equidade** (recall e falso-positivo por sexo e raça). O diagnóstico técnico da rodada (flags automáticas + comparação com a rodada anterior) fica em `dados/modelos/diagnostico_modelagem.{json,txt}`. |
 
 ## Arquitetura Medallion
 
@@ -183,7 +184,7 @@ pipeline (ou sob demanda via `python -m scripts.gerar_boletins_eda`):
 ├── dados_amostra/               # Amostra bruta + tratada + dicionário do IBGE, versionados (dados/ não é)
 ├── scripts/
 │   ├── gerar_amostra.py        # Gera a amostra acima a partir da Silver
-│   └── gerar_boletins_eda.py   # Regera os boletins HTML sob demanda
+│   └── gerar_boletins_eda.py   # Regera o boletim HTML de EDA sob demanda
 ├── docs/                       # Requisitos, dicionário de dados, arquitetura, plano de modelagem
 ├── dashboard/                  # Boletins de EDA (HTML, gerados) + apresentação (ex: Streamlit)
 ├── requirements.txt            # Dependências Python do projeto (versões fixadas)
@@ -241,8 +242,8 @@ pipeline.executar()
    (`src/preprocessamento/`) também já está implementado — seleciona as 22
    variáveis, trata nulos e consolida os períodos na Silver. A transformação
    (`src/transformacao/`) já filtra ocupados e deriva a variável-alvo de
-   informalidade (Gold). A análise exploratória (`src/analise/`) já gera os
-   boletins de EDA automaticamente (ver acima). A modelagem
+   informalidade (Gold). A análise exploratória (`src/analise/`) já gera o
+   boletim de EDA automaticamente (ver acima). A modelagem
    (`src/modelagem/`) já está implementada — ver [`docs/05-plano-de-
    modelagem.md`](docs/05-plano-de-modelagem.md) para os algoritmos e
    features usados.
@@ -260,5 +261,5 @@ pipeline.executar()
    Modelagem().executar()                # base completa (oficial)
    ```
 4. Documente decisões, dicionário de dados e relatório final em `docs/`.
-5. Apresente os resultados via `dashboard/` (boletins de EDA já prontos) e
+5. Apresente os resultados via `dashboard/` (boletim de EDA já pronto) e
    `dados/modelos/` (relatório e gráficos gerados pela modelagem).

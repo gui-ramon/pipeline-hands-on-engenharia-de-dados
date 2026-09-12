@@ -17,6 +17,7 @@ isso é de quem chama, não deste código.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import joblib
@@ -27,6 +28,7 @@ from src.modelagem import relatorio, treino
 
 CAMINHO_GOLD = Path("dados/gold")
 CAMINHO_MODELOS = Path("dados/modelos")
+CAMINHO_DASHBOARD = Path("dashboard")
 
 
 class Modelagem(Etapa):
@@ -38,6 +40,7 @@ class Modelagem(Etapa):
         self,
         caminho_entrada: Path = CAMINHO_GOLD,
         caminho_saida: Path = CAMINHO_MODELOS,
+        caminho_dashboard: Path = CAMINHO_DASHBOARD,
         n_amostra: int | None = None,
         ajustar_hiperparametros: bool = True,
         n_iter_busca: int = 5,
@@ -46,6 +49,7 @@ class Modelagem(Etapa):
     ) -> None:
         self.caminho_entrada = caminho_entrada
         self.caminho_saida = caminho_saida
+        self.caminho_dashboard = caminho_dashboard
         self.n_amostra = n_amostra
         self.ajustar_hiperparametros = ajustar_hiperparametros
         self.n_iter_busca = n_iter_busca
@@ -53,6 +57,7 @@ class Modelagem(Etapa):
         self.seed = seed
 
     def executar(self) -> None:
+        inicio_total = time.time()
         gold = self._carregar_gold()
         if gold.empty:
             return
@@ -87,7 +92,35 @@ class Modelagem(Etapa):
             self.caminho_saida / "relatorio_modelagem.txt",
         )
         self._salvar_artefatos(modelos, matriz_comparacao)
+
+        # Camada de apresentação/diagnóstico — deriva dos números acima,
+        # não recalcula nada de treino (ver `src/modelagem/relatorio.py`).
+        config = {
+            "n_amostra": self.n_amostra,
+            "base": "amostra" if self.n_amostra else "completa",
+            "seed": self.seed,
+            "ajustar_hiperparametros": self.ajustar_hiperparametros,
+            "n_iter_busca": self.n_iter_busca,
+            "max_amostras_shap": self.max_amostras_shap,
+            "n_treino": int(len(x_treino)),
+            "n_teste": int(len(x_teste)),
+            "tempos_treino_s": {nome: round(t, 2) for nome, t in tempos.items()},
+            "hiperparametros": {nome: info.melhores_parametros for nome, info in modelos.items()},
+            "tempo_total_s": round(time.time() - inicio_total, 2),
+        }
+        dados_boletim = relatorio.preparar_dados_boletim(modelos, x_teste, y_teste, shap_importancia)
+        self.caminho_dashboard.mkdir(parents=True, exist_ok=True)
+        relatorio.gerar_boletim_html(
+            metricas_treino, metricas_teste, matriz_comparacao, confusao_por_grupo,
+            shap_por_grupo, dados_boletim, tempos, config,
+            self.caminho_dashboard / "modelagem_informalidade.html",
+        )
+        relatorio.gerar_diagnostico(
+            metricas_treino, metricas_teste, matriz_comparacao, confusao_por_grupo,
+            dados_boletim, config, self.caminho_saida,
+        )
         print(f"\nArtefatos salvos em: {self.caminho_saida.resolve()}")
+        print(f"Boletim: {(self.caminho_dashboard / 'modelagem_informalidade.html').resolve()}")
 
     def _carregar_gold(self) -> pd.DataFrame:
         arquivo = self.caminho_entrada / "dados_gold.parquet"
