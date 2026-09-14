@@ -142,6 +142,11 @@ def headline(slide, txt, x=Inches(0.75), y=Inches(0.95), w=Inches(11.6), tamanho
                  negrito=True, espacamento=1.02, fonte=FONTE)
 
 
+def subtitulo(slide, txt, x=Inches(0.75), y=Inches(1.28), w=Inches(11.6), tamanho=16.5):
+    return texto(slide, x, y, w, Inches(0.85), txt, tamanho=tamanho, cor=CINZA,
+                 fonte=FONTE, espacamento=1.2)
+
+
 def barra_lateral(slide, cor=VERMELHO):
     retangulo(slide, 0, 0, Inches(0.14), ALTURA, cor)
 
@@ -166,11 +171,11 @@ def imagem_centrada(slide, caminho, x, y, w=None, h=None):
     return slide.shapes.add_picture(str(caminho), x, y, width=w, height=h)
 
 
-def cabecalho_padrao(slide, num, kicker_txt, titulo_txt, tam_titulo=29, w_titulo=Inches(11.6)):
+def cabecalho_padrao(slide, num, titulo_txt, subtitulo_txt, tam_titulo=32, w_titulo=Inches(11.6)):
     barra_lateral(slide)
     logo(slide, "vermelho_h", largura=Inches(1.35))
-    kicker(slide, kicker_txt)
-    headline(slide, titulo_txt, tamanho=tam_titulo, w=w_titulo)
+    headline(slide, titulo_txt, tamanho=tam_titulo, y=Inches(0.55), w=w_titulo)
+    subtitulo(slide, subtitulo_txt, w=w_titulo)
     rodape(slide, num)
 
 
@@ -237,11 +242,17 @@ def linha_divisoria(slide, x, y, w, cor=CINZA_CLARO):
     retangulo(slide, x, y, w, Pt(1.1), cor)
 
 
-def botao_mais(slide, x, y, slide_alvo, diametro=Inches(0.4)):
+def botao_mais(slide, x, y, slide_alvo, diametro=Inches(0.4), rotulo=None, rotulo_w=Inches(2.6)):
     """Circulo '+' que pula para um slide oculto de apoio ao ser clicado
     durante a apresentacao (Slide Show) — o slide oculto continua fora da
     sequencia normal de avanco (F5/seta), so abre por este link ou por
-    'Ver Todos os Slides'."""
+    'Ver Todos os Slides'. `rotulo`, quando passado, desenha uma legenda
+    curta a esquerda do circulo (necessario quando o botao nao esta dentro
+    de um painel com titulo proprio, senao fica um '+' sem contexto)."""
+    if rotulo:
+        texto(slide, x - rotulo_w - Inches(0.12), y + diametro / 2 - Inches(0.11), rotulo_w,
+              Inches(0.24), rotulo, tamanho=10, cor=CINZA, negrito=True,
+              alinhamento=PP_ALIGN.RIGHT, fonte=FONTE, espacamento_letras=0.4, wrap=False)
     botao = slide.shapes.add_shape(MSO_SHAPE.OVAL, x, y, diametro, diametro)
     botao.fill.solid()
     botao.fill.fore_color.rgb = PRETO
@@ -376,7 +387,7 @@ barra_lateral(s)
 
 # ============================================================ 2. O PROBLEMA
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 2, "O PROBLEMA",
+cabecalho_padrao(s, 2, "O Problema",
                  "Quase metade dos trabalhadores ocupados no Brasil está na informalidade")
 stat_grande(s, Inches(0.75), Inches(2.2), Inches(3.6), "47,6%",
             "dos 2.522.338 trabalhadores ocupados analisados, PNAD Contínua 2023 a 2025",
@@ -395,7 +406,7 @@ texto(s, Inches(0.75), Inches(6.15), Inches(8), Inches(0.6),
 
 # ============================================================ 3. OBJETIVO
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 3, "OBJETIVO",
+cabecalho_padrao(s, 3, "Objetivo",
                  "Prever quem está na informalidade e entender quem ela mais afeta")
 objetivos = [
     ("01", "Prever", "Se um trabalhador está na informalidade, a partir de características observáveis (escolaridade, setor, região...)."),
@@ -417,7 +428,7 @@ rodape(s, 3)
 
 # ============================================================ 4. OS DADOS
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 4, "OS DADOS",
+cabecalho_padrao(s, 4, "Os Dados",
                  "PNAD Contínua, a maior pesquisa domiciliar do Brasil, direto do IBGE")
 stats = [
     ("12", "trimestres\n2023 – 2025"),
@@ -442,7 +453,7 @@ texto(s, Inches(0.75), Inches(4.75), Inches(11.6), Inches(1.6),
 # ============================================================ 5. PREPARAÇÃO
 s = nova_slide(BRANCO)
 s5 = s
-cabecalho_padrao(s, 5, "PREPARAÇÃO DOS DADOS",
+cabecalho_padrao(s, 5, "Preparação dos Dados",
                  "De microdados brutos a uma base curada, em três camadas")
 camadas = [
     ("BRONZE", "Dados brutos", "Como recebidos do IBGE, sem transformação"),
@@ -508,8 +519,8 @@ texto(s, x_dir + Inches(0.28), y_row2 + Inches(1.95), w_col - Inches(0.5), Inche
 # ============================================================ 6. EDA
 s = nova_slide(BRANCO)
 s6 = s
-cabecalho_padrao(s, 6, "ANÁLISE EXPLORATÓRIA",
-                 "Tamanho do negócio e vínculo temporário são os sinais mais fortes", tam_titulo=27)
+cabecalho_padrao(s, 6, "Análise Exploratória",
+                 "Tamanho do negócio e vínculo temporário são os sinais mais fortes")
 imagem_centrada(s, ASSETS_GRAFICOS / "fig_eda_top_features.png", Inches(0.85), Inches(2.15), w=Inches(7.6))
 texto(s, Inches(8.85), Inches(2.35), Inches(3.7), Inches(0.4), "FORÇA DE ASSOCIAÇÃO", tamanho=12,
       cor=CINZA, negrito=True, fonte=FONTE, espacamento_letras=1.2)
@@ -526,16 +537,19 @@ texto(s, Inches(9.13), Inches(4.58), Inches(3.3), Inches(1.2), [
     "35% moram no Nordeste (20% entre os formais)",
     "Renda mediana 42% menor: R$ 1.400 x R$ 2.400",
 ], tamanho=10.8, cor=PRETO, fonte=FONTE, espacamento=1.25)
-retangulo(s, Inches(0.75), Inches(6.05), Inches(11.83), Inches(0.75), QUASE_BRANCO, arredondado=True)
-texto(s, Inches(1.0), Inches(6.16), Inches(9.4), Inches(0.55),
-      "Decisão em 2 etapas, a mais difícil do projeto: das quase 420 variáveis da PNAD, 22 "
-      "entraram no pré-processamento por relevância direta. Dessas, 15 seguiram para o modelo, "
-      "2 delas (sexo e raça) por escopo obrigatório do projeto, não por força estatística.",
-      tamanho=11, cor=PRETO, fonte=FONTE, espacamento=1.2, ancora=MSO_ANCHOR.MIDDLE)
+retangulo(s, Inches(0.75), Inches(6.0), Inches(11.83), Inches(0.85), QUASE_BRANCO, arredondado=True)
+texto(s, Inches(1.0), Inches(6.1), Inches(9.8), Inches(0.25),
+      "DECISÃO DE VARIÁVEIS, A MAIS DIFÍCIL DO PROJETO", tamanho=10.5, cor=VERMELHO,
+      negrito=True, fonte=FONTE, espacamento_letras=0.7)
+texto(s, Inches(1.0), Inches(6.36), Inches(9.7), Inches(0.45),
+      "Das quase 420 variáveis da PNAD, 22 entraram no pré-processamento por relevância "
+      "direta. Dessas, 15 seguiram para o modelo: 2 delas (sexo e raça) por escopo "
+      "obrigatório do projeto, não por força estatística.",
+      tamanho=10.5, cor=PRETO, fonte=FONTE, espacamento=1.15)
 
 # ============================================================ 7. A SOLUÇÃO
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 7, "A SOLUÇÃO", "Um pipeline completo, do dado bruto à predição")
+cabecalho_padrao(s, 7, "A Solução", "Um pipeline completo, do dado bruto à predição")
 etapas = ["Ingestão", "Pré-\nprocessamento", "Transformação", "Análise\nexploratória",
           "Modelagem\n& ML", "Interpretação\n& equidade"]
 w_etapa = Inches(1.72)
@@ -558,7 +572,7 @@ texto(s, Inches(0.75), Inches(5.25), Inches(11.6), Inches(0.6),
 
 # ============================================================ 8. CONSTRUÇÃO DO MODELO
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 8, "A CONSTRUÇÃO DO MODELO",
+cabecalho_padrao(s, 8, "Modelagem",
                  "Três modelos avaliados sob a mesma regra de validação")
 modelos_txt = [
     ("Regressão Logística", "Baseline interpretável. Coeficiente de cada variável é direto de explicar, sanity check dos outros dois."),
@@ -579,8 +593,8 @@ texto(s, Inches(3.9), Inches(5.02), Inches(8.4), Inches(1.1),
 
 # ============================================================ 9. INTERPRETABILIDADE / EQUIDADE
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 9, "INTERPRETABILIDADE E EQUIDADE",
-                 "O modelo é interpretável, e isso expôs uma desigualdade real", tam_titulo=27)
+cabecalho_padrao(s, 9, "Interpretabilidade e Equidade",
+                 "O modelo é interpretável, e isso expôs uma desigualdade real")
 imagem_centrada(s, ASSETS_GRAFICOS / "fig_shap_top_features.png", Inches(0.75), Inches(2.2), w=Inches(6.9))
 texto(s, Inches(0.85), Inches(5.75), Inches(6.6), Inches(0.5),
       "SHAP: o que mais pesou na decisão do modelo campeão", tamanho=11.5, cor=CINZA,
@@ -595,8 +609,8 @@ texto(s, Inches(8.2), Inches(5.72), Inches(4.2), Inches(1.1),
 # ============================================================ 10. RESULTADOS (mais importante)
 s = nova_slide(BRANCO)
 s10 = s
-cabecalho_padrao(s, 10, "RESULTADOS",
-                 "92,6% de AUC-ROC no ano que o modelo nunca viu", tam_titulo=29)
+cabecalho_padrao(s, 10, "Resultados",
+                 "92,6% de AUC-ROC no ano que o modelo nunca viu")
 cabecalhos_tab = ["Modelo", "Accuracy", "Precision", "Recall", "F1", "AUC-ROC", "Tempo (s)"]
 linhas_tab = [
     ["HistGradientBoosting", "0.8474", "0.8384", "0.8360", "0.8372", "0.9261", "178.70"],
@@ -616,48 +630,47 @@ texto(s, Inches(0.75), Inches(4.3), Inches(7.9), Inches(2.5),
       tamanho=13.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
 imagem_centrada(s, ASSETS_GRAFICOS / "fig_roc.png", Inches(9.15), Inches(3.85), w=Inches(3.3))
 
-# ============================================================ 11. CONCLUSÕES
+# ============================================================ 11. CONCLUSÃO GERAL
 s = nova_slide(BRANCO)
-cabecalho_padrao(s, 11, "CONCLUSÕES", "Funcionou, e mostrou exatamente onde melhorar")
-retangulo(s, Inches(0.75), Inches(2.3), Inches(5.75), Inches(4.05), QUASE_BRANCO, arredondado=True)
-texto(s, Inches(1.05), Inches(2.55), Inches(5.2), Inches(0.5), "O QUE FUNCIONOU", tamanho=13,
+cabecalho_padrao(s, 11, "Conclusão Geral",
+                 "Sobre o modelo, e sobre o problema que ele tenta resolver")
+retangulo(s, Inches(0.75), Inches(1.95), Inches(11.83), Inches(0.95), ROSA_FUNDO, arredondado=True)
+texto(s, Inches(1.05), Inches(1.95), Inches(11.25), Inches(0.95),
+      "A informalidade não é um detalhe estatístico: é quase metade do mercado de trabalho "
+      "brasileiro, distribuída de forma desigual entre região, setor e cor. Foi esse padrão "
+      "que motivou todo o projeto.",
+      tamanho=13.5, cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento=1.2,
+      ancora=MSO_ANCHOR.MIDDLE)
+
+retangulo(s, Inches(0.75), Inches(3.15), Inches(5.75), Inches(3.3), QUASE_BRANCO, arredondado=True)
+texto(s, Inches(1.05), Inches(3.4), Inches(5.2), Inches(0.5), "O QUE FUNCIONOU", tamanho=13,
       cor=VERMELHO, negrito=True, fonte=FONTE, espacamento_letras=1.1)
-texto(s, Inches(1.05), Inches(3.1), Inches(5.15), Inches(3.1), [
-    "• Pipeline reprodutível ponta a ponta, com validação em cada camada (0 linhas perdidas Bronze → Silver)",
+texto(s, Inches(1.05), Inches(3.9), Inches(5.15), Inches(2.4), [
+    "• Pipeline reprodutível ponta a ponta, do dado bruto do IBGE até uma predição interpretável",
     "• Modelo com bom poder preditivo (AUC 0,93) e sem overfitting relevante",
     "• Interpretabilidade real via SHAP, não uma caixa-preta",
-], tamanho=13, cor=PRETO, fonte=FONTE, espacamento=1.35)
-retangulo(s, Inches(6.85), Inches(2.3), Inches(5.75), Inches(4.05), ROSA_FUNDO, arredondado=True)
-texto(s, Inches(7.15), Inches(2.55), Inches(5.2), Inches(0.5), "PRÓXIMOS PASSOS", tamanho=13,
-      cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento_letras=1.1)
-texto(s, Inches(7.15), Inches(3.1), Inches(5.15), Inches(3.1), [
-    "• Corrigir a disparidade de recall no grupo Amarelos (reponderação ou threshold por grupo)",
-    "• Usar o peso amostral da PNAD (V1028) na avaliação, hoje só o próprio desenho complexo em aberto",
-    "• Monitorar novas safras trimestrais e o ganho marginal do campeão frente ao Random Forest",
-], tamanho=13, cor=PRETO, fonte=FONTE, espacamento=1.35)
+], tamanho=12.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
 
-# ============================================================ 12. CONCLUSÃO GERAL + ENCERRAMENTO
+retangulo(s, Inches(6.85), Inches(3.15), Inches(5.75), Inches(3.3), ROSA_FUNDO, arredondado=True)
+texto(s, Inches(7.15), Inches(3.4), Inches(5.2), Inches(0.5), "PRÓXIMOS PASSOS", tamanho=13,
+      cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento_letras=1.1)
+texto(s, Inches(7.15), Inches(3.9), Inches(5.15), Inches(2.4), [
+    "• Corrigir a disparidade de recall no grupo Amarelos (reponderação ou threshold por grupo)",
+    "• Usar o peso amostral da PNAD (V1028) na avaliação, hoje em aberto",
+    "• Monitorar novas safras trimestrais e o ganho marginal do campeão frente ao Random Forest",
+], tamanho=12.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
+
+# ============================================================ 12. ENCERRAMENTO
 s = nova_slide(VERMELHO)
-ROSA_CLARO = RGBColor(0xFF, 0xB3, 0xC0)
-logo(s, "branco_h", x=Inches(0.75), y=Inches(0.5), largura=Inches(1.45))
-texto(s, Inches(0.75), Inches(1.35), Inches(9), Inches(0.4), "CONCLUSÃO GERAL", tamanho=13,
-      cor=ROSA_CLARO, negrito=True, fonte=FONTE, espacamento_letras=1.5, maiusculas=True)
-texto(s, Inches(0.75), Inches(1.75), Inches(11.6), Inches(0.85),
-      "A informalidade não é um detalhe estatístico. É quase metade do mercado de trabalho "
-      "brasileiro, distribuída de forma desigual entre região, setor e cor.",
-      tamanho=16.5, cor=BRANCO, negrito=True, fonte=FONTE, espacamento=1.2)
-texto(s, Inches(0.75), Inches(2.75), Inches(11.6), Inches(0.9),
-      "Este projeto entrega mais que um modelo: um pipeline completo, do dado bruto do IBGE "
-      "até uma predição interpretável, reprodutível do início ao fim.",
-      tamanho=16.5, cor=BRANCO, negrito=True, fonte=FONTE, espacamento=1.2)
-linha_divisoria(s, Inches(0.75), Inches(3.95), Inches(4.2), cor=ROSA_CLARO)
-texto(s, Inches(0.75), Inches(4.2), Inches(10), Inches(1.0), "Obrigado.", tamanho=44, cor=BRANCO,
+logo(s, "branco_h", x=Inches(0.75), y=Inches(0.6), largura=Inches(1.6))
+texto(s, Inches(0.75), Inches(2.7), Inches(10), Inches(1.3), "Obrigado.", tamanho=58, cor=BRANCO,
       negrito=True, fonte=FONTE)
-texto(s, Inches(0.75), Inches(5.05), Inches(9), Inches(0.6), "Perguntas?", tamanho=20, cor=BRANCO,
+texto(s, Inches(0.75), Inches(3.85), Inches(9), Inches(0.7), "Perguntas?", tamanho=22, cor=BRANCO,
       fonte=FONTE)
-texto(s, Inches(0.75), Inches(6.1), Inches(9), Inches(1.0), INTEGRANTES, tamanho=12.5, cor=BRANCO,
-      fonte=FONTE, espacamento=1.3)
-texto(s, LARGURA - Inches(4.4), ALTURA - Inches(0.55), Inches(3.8), Inches(0.35),
+linha_divisoria(s, Inches(0.75), Inches(5.5), Inches(4.2), cor=RGBColor(0xFF, 0xB3, 0xC0))
+texto(s, Inches(0.75), Inches(5.7), Inches(9), Inches(1.2), INTEGRANTES, tamanho=13.5, cor=BRANCO,
+      fonte=FONTE, espacamento=1.35)
+texto(s, LARGURA - Inches(4.4), ALTURA - Inches(0.6), Inches(3.8), Inches(0.35),
       "github.com/gui-ramon/pipeline-hands-on-engenharia-de-dados", tamanho=9.5,
       cor=RGBColor(0xFF, 0xD8, 0xDD), alinhamento=PP_ALIGN.RIGHT, fonte=FONTE)
 
@@ -793,6 +806,51 @@ texto(s, Inches(0.75), Inches(6.2), Inches(11.6), Inches(0.6),
       "custoso para o objetivo do projeto: subestima o tamanho real da informalidade.",
       tamanho=12, cor=PRETO, fonte=FONTE, espacamento=1.2)
 
+# ------------------------------------------------------------ E. Gráficos da EDA
+# Layout segue "storytelling with data": titulo de acao (a conclusao, nao um
+# rotulo descritivo), 1 grafico so com so os extremos coloridos e o resto em
+# cinza (preattentive attributes — Knaflic), e os 2 achados mais fortes
+# repetidos como "big numbers" ao lado (formula McKinsey: destaque + texto
+# com a implicacao). Ver referencias no rodape do roteiro, secao 5.
+s = nova_slide(BRANCO)
+s17 = s
+cabecalho_apoio(s, "ANÁLISE EXPLORATÓRIA",
+                "Sem instrução e agropecuária concentram a informalidade")
+marcar_oculto(s)
+
+texto(s, Inches(0.75), Inches(1.6), Inches(11.83), Inches(0.32),
+      "Cada barra mostra quantas vezes a categoria é mais comum num grupo do que no outro "
+      "(escala logarítmica). Cor só nos 3 casos mais extremos — o resto fica em cinza, perto "
+      "do equilíbrio (linha central = 1x).",
+      tamanho=10.5, cor=CINZA, fonte=FONTE, espacamento=1.15)
+
+imagem_centrada(s, ASSETS_GRAFICOS / "fig_eda_indice.png", Inches(0.75), Inches(2.0), w=Inches(6.85))
+
+x_lat = Inches(7.95)
+w_lat = Inches(4.63)
+
+retangulo(s, x_lat, Inches(1.95), w_lat, Inches(1.4), ROSA_FUNDO, arredondado=True)
+texto(s, x_lat + Inches(0.25), Inches(2.06), Inches(2.0), Inches(0.7), "5,0x",
+      tamanho=38, cor=VERMELHO, negrito=True, fonte=FONTE)
+texto(s, x_lat + Inches(0.25), Inches(2.75), w_lat - Inches(0.5), Inches(0.55),
+      "mais informalidade entre quem não tem instrução (5% dos informais, 1% dos formais)",
+      tamanho=10.5, cor=PRETO, fonte=FONTE, espacamento=1.15)
+
+retangulo(s, x_lat, Inches(3.5), w_lat, Inches(1.4), ROSA_FUNDO, arredondado=True)
+texto(s, x_lat + Inches(0.25), Inches(3.61), Inches(2.0), Inches(0.7), "4,0x",
+      tamanho=38, cor=VERMELHO, negrito=True, fonte=FONTE)
+texto(s, x_lat + Inches(0.25), Inches(4.3), w_lat - Inches(0.5), Inches(0.55),
+      "mais informalidade na agropecuária, pesca e aquicultura (24% x 6% entre os formais)",
+      tamanho=10.5, cor=PRETO, fonte=FONTE, espacamento=1.15)
+
+retangulo(s, x_lat, Inches(5.05), w_lat, Inches(1.7), QUASE_BRANCO, arredondado=True)
+texto(s, x_lat + Inches(0.25), Inches(5.15), Inches(3.5), Inches(0.25), "RENDA MEDIANA",
+      tamanho=10, cor=CINZA, negrito=True, fonte=FONTE, espacamento_letras=0.6)
+imagem_centrada(s, ASSETS_GRAFICOS / "fig_eda_renda.png", x_lat + Inches(0.25), Inches(5.42), w=Inches(2.1))
+texto(s, x_lat + Inches(0.25), Inches(6.1), w_lat - Inches(0.5), Inches(0.55),
+      "Informal ganha 42% menos. Não entra no modelo: é consequência da informalidade, não causa.",
+      tamanho=10, cor=PRETO, fonte=FONTE, espacamento=1.15)
+
 # ======================================================================
 # BOTÕES "+" — atalho clicável dos slides principais para os ocultos
 # ======================================================================
@@ -801,13 +859,14 @@ texto(s, Inches(0.75), Inches(6.2), Inches(11.6), Inches(0.6),
 botao_mais(s5, Inches(5.92), Inches(4.3), s13)
 botao_mais(s5, Inches(12.04), Inches(4.3), s14)
 
-# slide 6: decisão de variáveis
+# slide 6: destaques do trabalhador informal (gráficos da EDA) e decisão de variáveis
+botao_mais(s6, Inches(12.12), Inches(4.08), s17)
 botao_mais(s6, Inches(12.03), Inches(6.225), s15)
 
 # slide 10: matrizes de confusão
-botao_mais(s10, Inches(12.03), Inches(1.5), s16)
+botao_mais(s10, Inches(12.03), Inches(1.5), s16, rotulo="MATRIZES DE CONFUSÃO")
 
-for slide_oculto in (s13, s14, s15, s16):
+for slide_oculto in (s13, s14, s15, s16, s17):
     botao_casa(slide_oculto)
 
 SAIDA.parent.mkdir(parents=True, exist_ok=True)

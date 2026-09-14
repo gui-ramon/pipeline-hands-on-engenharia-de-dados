@@ -559,28 +559,28 @@ fala(
     "eixos."
 )
 
-bloco_cabecalho(11, "Conclusões, Limitações e Próximos Passos", "40 s")
+bloco_cabecalho(11, "Conclusão Geral", "50 s")
 fala(
-    "Em resumo: funcionou, e mostrou exatamente onde melhorar. "
-    "Construímos um pipeline reprodutível de ponta a ponta, um modelo com "
-    "bom poder preditivo e interpretabilidade real, não uma caixa-preta. "
-    "As limitações também são claras: a disparidade de recall no grupo "
-    "Amarelos precisa de tratamento, reponderação no treino ou um "
-    "threshold específico por grupo. O peso amostral complexo da PNAD "
-    "ainda não entrou na avaliação, e fica como próximo passo natural, "
-    "assim como monitorar novas safras trimestrais à medida que o IBGE "
-    "publica."
+    "Para fechar, voltamos ao tema. A informalidade não é um detalhe "
+    "estatístico: é quase metade do mercado de trabalho brasileiro, "
+    "distribuída de forma desigual entre região, setor e cor. Foi esse "
+    "padrão que motivou todo o projeto, do início ao fim."
+)
+fala(
+    "Sobre o que funcionou: construímos um pipeline reprodutível de "
+    "ponta a ponta, do dado bruto do IBGE até uma predição interpretável. "
+    "O modelo tem bom poder preditivo, AUC de 0,93, e interpretabilidade "
+    "real via SHAP, não uma caixa-preta. Sobre o que falta: a disparidade "
+    "de recall no grupo Amarelos precisa de tratamento, reponderação no "
+    "treino ou um threshold específico por grupo. O peso amostral "
+    "complexo da PNAD ainda não entrou na avaliação, e fica como próximo "
+    "passo natural, assim como monitorar novas safras trimestrais à "
+    "medida que o IBGE publica."
 )
 
-bloco_cabecalho(12, "Conclusão Geral e Encerramento", "10 s")
+bloco_cabecalho(12, "Encerramento", "10 s")
 fala(
-    "Para fechar, duas frases. Sobre o tema: a informalidade não é um "
-    "detalhe estatístico, é quase metade do mercado de trabalho "
-    "brasileiro, distribuída de forma desigual entre região, setor e "
-    "cor. Sobre o projeto: entregamos mais que um modelo, um pipeline "
-    "completo, do dado bruto do IBGE até uma predição interpretável, "
-    "reprodutível do início ao fim. Muito obrigado. Ficamos à "
-    "disposição para perguntas."
+    "Muito obrigado. Ficamos à disposição para perguntas."
 )
 
 quebrar_pagina()
@@ -710,19 +710,19 @@ quebrar_pagina()
 # ======================================================================
 titulo1("5", "Slides de apoio (material oculto)")
 fala(
-    "O arquivo InformalidadeBR - Apresentacao.pptx tem 16 slides no "
+    "O arquivo InformalidadeBR - Apresentacao.pptx tem 17 slides no "
     "total: os 12 numerados acima, que contam a história em 10 minutos, "
-    "e mais 4 marcados como \"ocultos\" no PowerPoint. Eles não aparecem "
+    "e mais 5 marcados como \"ocultos\" no PowerPoint. Eles não aparecem "
     "ao apertar F5 e avançar normalmente. Para abri-los, basta clicar no "
     "círculo preto com \"+\" que aparece nos slides 5 (dois círculos), 6 "
-    "e 10. O clique pula direto para o slide de apoio correspondente, "
-    "mesmo durante a apresentação. Cada slide de apoio tem um ícone de "
-    "casinha no canto superior esquerdo, que retorna exatamente para "
-    "onde a apresentação estava antes do clique. (Alternativa manual, "
-    "se algum botão falhar: clique direito → Ver Todos os Slides, ou "
-    "digite o número do slide e Enter.) Servem para aprofundar uma "
-    "resposta na rodada de perguntas sem atropelar o tempo da "
-    "apresentação principal."
+    "(dois círculos) e 10 (um círculo). O clique pula direto para o "
+    "slide de apoio correspondente, mesmo durante a apresentação. Cada "
+    "slide de apoio tem um ícone de casinha no canto superior esquerdo, "
+    "que retorna exatamente para onde a apresentação estava antes do "
+    "clique. (Alternativa manual, se algum botão falhar: clique direito "
+    "→ Ver Todos os Slides, ou digite o número do slide e Enter.) Servem "
+    "para aprofundar uma resposta na rodada de perguntas sem atropelar o "
+    "tempo da apresentação principal."
 )
 apoio_slides = [
     ("Slide 13: O funil completo dos dados",
@@ -748,6 +748,15 @@ apoio_slides = [
      "Os números completos de acerto e erro por modelo no teste de 2025 "
      "(864.940 pessoas), com destaque para o custo do falso negativo. "
      "Puxar se perguntarem sobre onde exatamente o modelo erra."),
+    ("Slide 17: Sem instrução e agropecuária concentram a informalidade",
+     "Um único ranking (escolaridade e setor combinados, escala "
+     "logarítmica) mostrando quantas vezes cada categoria é mais comum "
+     "num grupo do que no outro. Só os 3 casos mais extremos ganham cor "
+     "(vermelho: sem instrução 5x, agropecuária 4x; preto: superior "
+     "completo 0,4x) — o resto fica cinza, sem competir por atenção. Mais "
+     "a comparação de renda mediana (42% menor entre informais). Puxar "
+     "se pedirem para ver os gráficos da EDA além do ranking de força "
+     "das features."),
 ]
 for titulo_apoio, corpo_apoio in apoio_slides:
     p = doc.add_paragraph()

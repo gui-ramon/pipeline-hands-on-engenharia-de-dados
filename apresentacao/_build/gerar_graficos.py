@@ -9,6 +9,7 @@ parquet da Gold pra recalcular a curva ROC no mesmo split temporal oficial.
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -197,6 +198,113 @@ def grafico_confusao(y_teste, predicoes):
     salvar(fig, "fig_confusao.png")
 
 
+def grafico_indice_concentracao():
+    """Indice de concentracao (razao informal/formal) combinando escolaridade
+    e setor de atividade num unico ranking, escala log2 (simetrica em torno
+    de 1x = mesma proporcao). So as 3 categorias mais extremas ganham cor —
+    as outras 10 ficam cinza, sem competir por atencao — tecnica de
+    "highlight + grey out" (Knaflic, Storytelling with Data: preattentive
+    attributes) combinada com titulo de acao (McKinsey: takeaway title, nao
+    rotulo descritivo). Dados de dashboard/censo_informalidade.html, sec. 02."""
+    dados = [
+        ("Sem instrução", 5, 1),
+        ("Agropecuária, pesca e aquicultura", 24, 6),
+        ("Serviços domésticos", 10, 3),
+        ("Fundamental incompleto", 32, 12),
+        ("Construção", 10, 4),
+        ("Médio incompleto", 8, 5),
+        ("Fundamental completo", 9, 6),
+        ("Médio completo", 30, 38),
+        ("Superior incompleto", 5, 7),
+        ("Comércio e reparação de veículos", 14, 21),
+        ("Educação, saúde e serviços sociais", 8, 17),
+        ("Indústria geral", 7, 15),
+        ("Superior completo", 12, 30),
+    ]
+    itens = sorted(((nome, informal / formal) for nome, informal, formal in dados), key=lambda t: -t[1])
+    categorias = [n for n, _ in itens]
+    razoes = [r for _, r in itens]
+    logs = [math.log2(r) for r in razoes]
+
+    CINZA_BARRA = "#D3D3D3"
+    CINZA_TXT = "#9E9E9E"
+    n = len(categorias)
+    destaque_topo = {0, 1}
+    destaque_base = {n - 1}
+
+    fig, ax = plt.subplots(figsize=(7.8, 5.5))
+    y_pos = list(range(n))
+    cores = [
+        VERMELHO if i in destaque_topo else (PRETO if i in destaque_base else CINZA_BARRA)
+        for i in range(n)
+    ]
+    ax.barh(y_pos, logs, color=cores, height=0.64, zorder=3)
+    ax.axvline(0, color=CINZA, linewidth=1.3, zorder=2)
+
+    max_abs = max(abs(v) for v in logs)
+    ax.set_xlim(-max_abs * 1.55, max_abs * 1.55)
+
+    for i, (r, lv) in enumerate(zip(razoes, logs)):
+        rotulo = f"{r:.1f}x".replace(".", ",")
+        destaque = i in destaque_topo or i in destaque_base
+        cor_txt = VERMELHO if i in destaque_topo else (PRETO if i in destaque_base else CINZA_TXT)
+        peso = "bold" if destaque else "normal"
+        tam = 13.5 if destaque else 11
+        if lv >= 0:
+            ax.text(lv + max_abs * 0.05, i, rotulo, va="center", ha="left",
+                     fontsize=tam, fontweight=peso, color=cor_txt)
+        else:
+            ax.text(lv - max_abs * 0.05, i, rotulo, va="center", ha="right",
+                     fontsize=tam, fontweight=peso, color=cor_txt)
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(categorias, fontsize=12)
+    for i, label in enumerate(ax.get_yticklabels()):
+        if i in destaque_topo:
+            label.set_color(VERMELHO)
+            label.set_fontweight("bold")
+        elif i in destaque_base:
+            label.set_color(PRETO)
+            label.set_fontweight("bold")
+        else:
+            label.set_color(CINZA_TXT)
+    ax.invert_yaxis()
+    ax.set_xticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(length=0)
+
+    ax.text(0.0, 1.03, "← mais comum entre formais", transform=ax.transAxes, fontsize=11.5,
+             color=PRETO, fontweight="bold", ha="left", va="bottom")
+    ax.text(1.0, 1.03, "mais comum entre informais →", transform=ax.transAxes, fontsize=11.5,
+             color=VERMELHO, fontweight="bold", ha="right", va="bottom")
+
+    fig.tight_layout()
+    salvar(fig, "fig_eda_indice.png")
+
+
+def grafico_eda_renda():
+    # Renda mediana formal x informal — dashboard/censo_informalidade.html
+    grupos = ["Formal", "Informal"]
+    valores = [2400, 1400]
+    cores = [PRETO, VERMELHO]
+    fig, ax = plt.subplots(figsize=(4.6, 1.35))
+    barras = ax.barh(grupos, valores, color=cores, height=0.55, zorder=3)
+    ax.invert_yaxis()
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_xticks([])
+    ax.tick_params(axis="y", length=0, labelsize=13)
+    max_val = max(valores)
+    ax.set_xlim(0, max_val * 1.5)
+    for barra, valor in zip(barras, valores):
+        ax.text(barra.get_width() + max_val * 0.03, barra.get_y() + barra.get_height() / 2,
+                 f"R$ {valor:,.0f}".replace(",", "."), va="center", ha="left",
+                 fontsize=13, fontweight="bold", color=PRETO)
+    fig.tight_layout()
+    salvar(fig, "fig_eda_renda.png")
+
+
 def grafico_equidade():
     # recall por grupo — Amarelos vs. geral (evidencia do diagnostico oficial)
     grupos = ["Geral", "Amarelos"]
@@ -226,6 +334,8 @@ if __name__ == "__main__":
     grafico_eda_top_features()
     grafico_shap_campeao()
     grafico_equidade()
+    grafico_indice_concentracao()
+    grafico_eda_renda()
     y_teste, predicoes = _carregar_predicoes_teste()
     grafico_roc(y_teste, predicoes)
     grafico_confusao(y_teste, predicoes)
