@@ -477,17 +477,23 @@ fala(
 # ---------------------------------------------------------- BLOCO 3
 titulo2("3.3", "Bloco 3: Modelagem e solução (3 min)")
 
-bloco_cabecalho(7, "A Solução", "50 s")
+bloco_cabecalho(7, "A Solução", "55 s")
 fala(
-    "Todo esse trabalho está organizado em um pipeline completo, com "
-    "seis etapas conectadas: ingestão, pré-processamento, transformação, "
-    "análise exploratória, modelagem e interpretação. Cada etapa é uma "
-    "classe própria em Python, orientada a uma interface comum, "
-    "executável isoladamente ou em cadeia. Usamos pandas para "
-    "manipulação de dados, scikit-learn para os modelos, e SHAP para "
-    "interpretabilidade. Nada exótico, ferramentas maduras, mas "
-    "organizadas de um jeito que torna o projeto inteiro reprodutível do "
-    "início ao fim."
+    "Este slide resume, em uma arquitetura só, tudo que acabamos de "
+    "mostrar e o que vem a seguir: os dados saem do IBGE, passam pelo "
+    "pipeline em Python pelas três camadas — Bronze, Silver, Gold —, "
+    "seguem para a análise exploratória, e chegam ao modelo e aos "
+    "resultados. Cada etapa é uma classe própria, orientada a uma "
+    "interface comum, executável "
+    "isoladamente ou em cadeia. Usamos pandas para manipulação de dados, "
+    "scikit-learn para os modelos, e SHAP para interpretabilidade. "
+    "Claude Code e o framework AIOX entraram só como auxiliares no "
+    "desenvolvimento; toda decisão do projeto foi nossa."
+)
+fala(
+    "E é exatamente essa etapa em destaque vermelho, o modelo, que os "
+    "próximos três slides vão destrinchar: como ele foi construído, "
+    "avaliado e interpretado."
 )
 
 bloco_cabecalho(8, "Construção do Modelo", "70 s")
@@ -548,9 +554,9 @@ fala(
     "E a última coluna da tabela é a que menos aparece nesse tipo de "
     "apresentação, mas que pesou de verdade na nossa decisão: tempo de "
     "treino. O HistGradientBoosting não é só o mais preciso, é também o "
-    "mais rápido dos dois modelos fortes, 179 segundos contra 2.172 "
-    "segundos do Random Forest, mais de 36 minutos. Doze vezes mais "
-    "lento por um ganho de apenas 0,9 ponto de AUC. Isso importa porque "
+    "mais rápido dos dois modelos fortes: 3 minutos contra 36 minutos "
+    "do Random Forest. Doze vezes mais lento por um ganho de apenas 0,9 "
+    "ponto de AUC. Isso importa porque "
     "tempo de treino é custo de engenharia: quanto mais rápido, mais "
     "vezes dá para retreinar, ajustar hiperparâmetro e comparar. Se "
     "interpretabilidade importar mais que esse último ponto percentual "
@@ -567,15 +573,20 @@ fala(
     "padrão que motivou todo o projeto, do início ao fim."
 )
 fala(
-    "Sobre o que funcionou: construímos um pipeline reprodutível de "
-    "ponta a ponta, do dado bruto do IBGE até uma predição interpretável. "
-    "O modelo tem bom poder preditivo, AUC de 0,93, e interpretabilidade "
-    "real via SHAP, não uma caixa-preta. Sobre o que falta: a disparidade "
-    "de recall no grupo Amarelos precisa de tratamento, reponderação no "
-    "treino ou um threshold específico por grupo. O peso amostral "
-    "complexo da PNAD ainda não entrou na avaliação, e fica como próximo "
-    "passo natural, assim como monitorar novas safras trimestrais à "
-    "medida que o IBGE publica."
+    "A parte mais difícil do projeto não foi treinar o modelo: foi decidir "
+    "quais das 420 variáveis podiam entrar sem colar a resposta. E o "
+    "modelo, ao ser interpretável, expôs uma desigualdade real — o recall "
+    "12 pontos menor no grupo Amarelos — que um modelo caixa-preta teria "
+    "escondido."
+)
+fala(
+    "E voltando ao objetivo que apresentamos lá no início: prever, "
+    "explicar, medir equidade. Os três foram atingidos. Prever: sim, AUC "
+    "de 0,93 no ano que o modelo nunca viu. Explicar: sim, o SHAP "
+    "confirmou os mesmos fatores que a análise exploratória já apontava. "
+    "Medir equidade: sim — e o resultado foi desconfortável, mas é "
+    "exatamente esse tipo de coisa que só aparece quando se mede de "
+    "verdade."
 )
 
 bloco_cabecalho(12, "Encerramento", "10 s")

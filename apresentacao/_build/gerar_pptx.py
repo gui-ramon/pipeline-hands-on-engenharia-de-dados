@@ -22,6 +22,7 @@ from pptx.util import Emu, Inches, Pt
 
 RAIZ = Path(__file__).resolve().parents[2]
 ASSETS_LOGO = RAIZ / "apresentacao" / "_assets_identidade" / "mck_png" / "MCK_PNG"
+ASSETS_FERRAMENTAS = RAIZ / "apresentacao" / "_assets_identidade" / "ferramentas"
 ASSETS_GRAFICOS = RAIZ / "apresentacao" / "_assets_graficos"
 SAIDA = RAIZ / "apresentacao" / "InformalidadeBR - Apresentacao.pptx"
 
@@ -29,6 +30,10 @@ LOGO_VERMELHO_H = ASSETS_LOGO / "MCK_horizontal_vermelho.png"
 LOGO_BRANCO_H = ASSETS_LOGO / "MCK_horizontal_branca-01.png"
 LOGO_VERMELHO_V = ASSETS_LOGO / "MCK_vertical_vermelho-01.png"
 LOGO_PRETO_H = ASSETS_LOGO / "MCK_horizontal_preto-01.png"
+
+LOGO_IBGE = ASSETS_FERRAMENTAS / "ibge.png"
+LOGO_PYTHON = ASSETS_FERRAMENTAS / "python.png"
+LOGO_CLAUDE = ASSETS_FERRAMENTAS / "claude.png"
 
 # ---------------------------------------------------------------- identidade
 VERMELHO = RGBColor(0xEB, 0x00, 0x29)
@@ -39,8 +44,11 @@ CINZA_CLARO = RGBColor(0xE7, 0xE7, 0xE7)
 QUASE_BRANCO = RGBColor(0xFA, 0xF9, 0xF8)
 BRANCO = RGBColor(0xFF, 0xFF, 0xFF)
 ROSA_FUNDO = RGBColor(0xFC, 0xE9, 0xEB)
+DOURADO = RGBColor(0xC9, 0x9A, 0x2C)  # realce de "conquista" — usado com moderacao
+CINZA_BORDA = RGBColor(0xBF, 0xBF, 0xBF)  # borda visivel (o CINZA_CLARO antigo era claro demais)
 
 FONTE = "Arial"
+FONTE_DESTAQUE = "Arial Black"  # numeros/estatisticas "hero" que precisam gritar mais
 
 EMU_POR_POL = 914400
 LARGURA = Inches(13.333)
@@ -92,7 +100,7 @@ def retangulo(slide, x, y, w, h, cor, linha=False, cor_linha=None, arredondado=F
     forma.fill.fore_color.rgb = cor
     if linha:
         forma.line.color.rgb = cor_linha or cor
-        forma.line.width = Pt(1)
+        forma.line.width = Pt(1.5)
     else:
         forma.line.fill.background()
     sem_sombra(forma)
@@ -130,6 +138,56 @@ def texto(slide, x, y, w, h, corpo, tamanho=18, cor=PRETO, negrito=False,
 def _definir_espacamento_letras(run, pontos):
     rPr = run._r.get_or_add_rPr()
     rPr.set("spc", str(int(pontos * 100)))
+
+
+def bullets_destaque(slide, x, y, w, h, itens, tamanho=12, cor=PRETO, cor_forte=None,
+                      espacamento=1.3, marcador="• "):
+    """Bullets com o "gancho" em negrito no inicio de cada linha (tecnica
+    de bullet escaneavel: quem so bate o olho ja pega a ideia, sem
+    precisar ler a frase inteira) — cada item e (trecho_forte, resto)."""
+    caixa = slide.shapes.add_textbox(x, y, w, h)
+    tf = caixa.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    for i, (forte, resto) in enumerate(itens):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.line_spacing = espacamento
+        r1 = p.add_run()
+        r1.text = f"{marcador}{forte}"
+        r1.font.size = Pt(tamanho)
+        r1.font.bold = True
+        r1.font.name = FONTE
+        r1.font.color.rgb = cor_forte or cor
+        r2 = p.add_run()
+        r2.text = resto
+        r2.font.size = Pt(tamanho)
+        r2.font.bold = False
+        r2.font.name = FONTE
+        r2.font.color.rgb = cor
+    return caixa
+
+
+def texto_com_links(slide, x, y, w, h, segmentos, tamanho=10.5, cor=CINZA, fonte=FONTE,
+                     ancora=MSO_ANCHOR.TOP, alinhamento=PP_ALIGN.LEFT):
+    """Uma linha com trechos clicaveis de verdade — cada item de
+    `segmentos` e (texto, url_ou_None). So o(s) trecho(s) com url viram
+    hyperlink real (ppt abre no navegador ao clicar)."""
+    caixa = slide.shapes.add_textbox(x, y, w, h)
+    tf = caixa.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = ancora
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = alinhamento
+    for texto_seg, url in segmentos:
+        run = p.add_run()
+        run.text = texto_seg
+        run.font.size = Pt(tamanho)
+        run.font.name = fonte
+        run.font.color.rgb = cor
+        if url:
+            run.hyperlink.address = url
+    return caixa
 
 
 def kicker(slide, txt, cor=VERMELHO, x=Inches(0.75), y=Inches(0.55)):
@@ -191,19 +249,23 @@ def cabecalho_apoio(slide, kicker_txt, titulo_txt, tam_titulo=27, w_titulo=Inche
     logo(slide, "preto_h", largura=Inches(1.35))
     kicker(slide, f"MATERIAL DE APOIO · {kicker_txt}", cor=CINZA, y=Inches(0.55))
     headline(slide, titulo_txt, tamanho=tam_titulo, y=Inches(0.95), w=w_titulo)
-    texto(slide, Inches(0.75), ALTURA - Inches(0.55), Inches(6), Inches(0.35),
-          "InformalidadeBR: apoio para perguntas (fora dos 10 min)", tamanho=9.5, cor=CINZA,
-          fonte=FONTE)
+    texto(slide, Inches(0.75), ALTURA - Inches(0.55), Inches(3), Inches(0.35),
+          "InformalidadeBR", tamanho=9.5, cor=CINZA, fonte=FONTE, negrito=True,
+          espacamento_letras=0.8)
 
 
 def card(slide, x, y, w, h, titulo_txt, corpo_txt, cor_titulo=VERMELHO, cor_fundo=QUASE_BRANCO,
-          tam_titulo=15, tam_corpo=13):
-    retangulo(slide, x, y, w, h, cor_fundo, arredondado=True)
-    retangulo(slide, x, y, Inches(0.06), h, cor_titulo)
+          tam_titulo=15, tam_corpo=13, borda=CINZA_BORDA):
+    retangulo(slide, x, y, w, h, cor_fundo, arredondado=True,
+              linha=borda is not None, cor_linha=borda)
+    # inset vertical pra nao vazar past o canto arredondado do card (uma
+    # barra reta encostada nos 4 cantos "escapa" da curva do container)
+    retangulo(slide, x, y + Inches(0.12), Inches(0.06), h - Inches(0.24), cor_titulo,
+              arredondado=True)
     texto(slide, x + Inches(0.28), y + Inches(0.22), w - Inches(0.5), Inches(0.5),
           titulo_txt, tamanho=tam_titulo, cor=PRETO, negrito=True, fonte=FONTE, espacamento=1.05)
     texto(slide, x + Inches(0.28), y + Inches(0.7), w - Inches(0.5), h - Inches(0.9),
-          corpo_txt, tamanho=tam_corpo, cor=CINZA, fonte=FONTE, espacamento=1.15)
+          corpo_txt, tamanho=tam_corpo, cor=PRETO, fonte=FONTE, espacamento=1.15)
 
 
 def seta_horizontal(slide, x, y, w, h=Inches(0.5), cor=VERMELHO):
@@ -228,6 +290,126 @@ def etapa_pipeline(slide, x, y, w, h, numero, titulo_txt, cor=PRETO, cor_fundo=Q
     texto(slide, x + Inches(0.12), y + Inches(0.58), w - Inches(0.24), h - Inches(0.7),
           titulo_txt, tamanho=12.5, cor=cor, negrito=True, alinhamento=PP_ALIGN.CENTER,
           fonte=FONTE, espacamento=1.05)
+
+
+def badge_numero(slide, x, y, numero, diametro=Inches(0.62), cor_fundo=VERMELHO, cor_texto=BRANCO):
+    """Circulo solido com um numero/texto curto dentro — usado como indice
+    visual real (substitui numeros 'fantasma' em cor pastel, ilegiveis a
+    distancia)."""
+    circulo = slide.shapes.add_shape(MSO_SHAPE.OVAL, x, y, diametro, diametro)
+    circulo.fill.solid()
+    circulo.fill.fore_color.rgb = cor_fundo
+    circulo.line.fill.background()
+    sem_sombra(circulo)
+    tf = circulo.text_frame
+    tf.word_wrap = False
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = numero
+    run.font.size = Pt(20)
+    run.font.bold = True
+    run.font.name = FONTE
+    run.font.color.rgb = cor_texto
+    return circulo
+
+
+def icone_cilindro(slide, x, y, w, h, cor):
+    """Icone de 'banco de dados' (cilindro) — mesma linguagem visual de
+    diagramas de arquitetura de dados (ETL, data warehouse)."""
+    forma = slide.shapes.add_shape(MSO_SHAPE.CAN, x, y, w, h)
+    forma.fill.solid()
+    forma.fill.fore_color.rgb = cor
+    forma.line.color.rgb = PRETO
+    forma.line.width = Pt(1)
+    sem_sombra(forma)
+    return forma
+
+
+def icone_barras(slide, x, y, w, h, cor=VERMELHO):
+    """Icone de 'mini histograma' (3 barras crescentes) — representa
+    analise/modelagem sem precisar de um logo de terceiro."""
+    n = 3
+    gap = w * 0.18
+    w_barra = (w - gap * (n - 1)) / n
+    alturas = [h * 0.45, h * 0.72, h]
+    for i, h_barra in enumerate(alturas):
+        retangulo(slide, x + i * (w_barra + gap), y + (h - h_barra), Emu(int(w_barra)),
+                   Emu(int(h_barra)), cor, arredondado=False)
+
+
+def icone_documento(slide, x, y, w, h, cor=VERMELHO):
+    """Icone de 'relatorio/boletim' (pagina com linhas de texto) — o
+    entregavel final (boletim HTML + modelo), sem logo de terceiro."""
+    retangulo(slide, x, y, w, h, QUASE_BRANCO, linha=True, cor_linha=cor, arredondado=True)
+    n_linhas = 3
+    margem = w * 0.18
+    y_linha = y + h * 0.28
+    for i in range(n_linhas):
+        largura_linha = w - 2 * margem if i < n_linhas - 1 else (w - 2 * margem) * 0.6
+        retangulo(slide, x + margem, y_linha + i * (h * 0.2), Emu(int(largura_linha)), Pt(2.6), cor)
+
+
+def icone_lupa(slide, x, y, w, h, cor):
+    """Icone de 'lupa' (explorar/analisar) — a etapa de Analise
+    Exploratoria, entre a Gold e o Modelo. Geometria calculada por
+    trigonometria (a versao anterior posicionava o cabo com um offset
+    aproximado que nao batia com o raio real da lente — ficava com o
+    cabo cortando a lente em vez de sair da borda dela)."""
+    tam = min(w, h)
+    diam = tam * 0.6
+    r = diam / 2
+    lente = slide.shapes.add_shape(MSO_SHAPE.OVAL, Emu(int(x)), Emu(int(y)),
+                                    Emu(int(diam)), Emu(int(diam)))
+    lente.fill.background()
+    lente.line.color.rgb = cor
+    lente.line.width = Pt(2.4)
+    sem_sombra(lente)
+
+    lx, ly = x + r, y + r  # centro da lente
+    comprimento = tam * 0.5
+    espessura = tam * 0.15
+    k = 0.7071  # cos/sen de 45 graus
+    cx = lx + (r + comprimento / 2) * k
+    cy = ly + (r + comprimento / 2) * k
+    cabo = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Emu(int(cx - comprimento / 2)), Emu(int(cy - espessura / 2)),
+        Emu(int(comprimento)), Emu(int(espessura)),
+    )
+    cabo.rotation = 45
+    cabo.fill.solid()
+    cabo.fill.fore_color.rgb = cor
+    cabo.line.fill.background()
+    sem_sombra(cabo)
+
+
+def icone_check(slide, x, y, w, h, cor_fundo, cor_check=BRANCO):
+    """Icone de 'resultado validado' (circulo com check) — a etapa final
+    do pipeline, antes da entrega."""
+    diam = min(w, h)
+    circulo = slide.shapes.add_shape(MSO_SHAPE.OVAL, x + (w - diam) / 2, y + (h - diam) / 2,
+                                      Emu(int(diam)), Emu(int(diam)))
+    circulo.fill.solid()
+    circulo.fill.fore_color.rgb = cor_fundo
+    circulo.line.fill.background()
+    sem_sombra(circulo)
+    tf = circulo.text_frame
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = "✓"
+    run.font.size = Pt(int(diam / 914400 * 32))
+    run.font.bold = True
+    run.font.color.rgb = cor_check
+
+
+def pill_zona(slide, x, y, w, h, texto_str, tamanho=11.5, cor_fundo=PRETO):
+    retangulo(slide, x, y, w, h, cor_fundo, arredondado=True)
+    texto(slide, x, y, w, h, texto_str, tamanho=tamanho, cor=BRANCO, negrito=True,
+          alinhamento=PP_ALIGN.CENTER, fonte=FONTE, espacamento_letras=0.4,
+          ancora=MSO_ANCHOR.MIDDLE, maiusculas=True)
 
 
 def stat_grande(slide, x, y, w, valor, legenda, tam_valor=54, cor=VERMELHO, alinhamento=PP_ALIGN.LEFT,
@@ -320,8 +502,9 @@ def botao_casa(slide):
 
 
 def tabela_comparacao(slide, x, y, w, h, cabecalhos, linhas, largura_col0, linha_destaque=None,
-                       wrap=False):
-    """Tabela nativa pptx: cabecalho preto, linha do campeao em vermelho."""
+                       wrap=False, cor_destaque=VERMELHO, cor_texto_destaque=BRANCO,
+                       tamanho=13.5, tamanho_cabecalho=13):
+    """Tabela nativa pptx: cabecalho preto, linha destacada na cor_destaque."""
     n_linhas = len(linhas) + 1
     n_cols = len(cabecalhos)
     grafico = slide.shapes.add_table(n_linhas, n_cols, x, y, w, h)
@@ -355,16 +538,16 @@ def tabela_comparacao(slide, x, y, w, h, cabecalhos, linhas, largura_col0, linha
         run.font.color.rgb = cor_texto
 
     for c, titulo_col in enumerate(cabecalhos):
-        _formatar_celula(tabela.cell(0, c), titulo_col, True, BRANCO, PRETO, tamanho=12,
+        _formatar_celula(tabela.cell(0, c), titulo_col, True, BRANCO, PRETO, tamanho=tamanho_cabecalho,
                           alinhamento=(PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER))
 
     for r, linha in enumerate(linhas, start=1):
         destaque = linha[0] == linha_destaque
-        cor_fundo = VERMELHO if destaque else (QUASE_BRANCO if r % 2 else BRANCO)
-        cor_texto = BRANCO if destaque else PRETO
+        cor_fundo = cor_destaque if destaque else (QUASE_BRANCO if r % 2 else BRANCO)
+        cor_texto = cor_texto_destaque if destaque else PRETO
         for c, valor in enumerate(linha):
             _formatar_celula(
-                tabela.cell(r, c), str(valor), destaque, cor_texto, cor_fundo, tamanho=12.5,
+                tabela.cell(r, c), str(valor), destaque, cor_texto, cor_fundo, tamanho=tamanho,
                 alinhamento=(PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER),
             )
     return tabela
@@ -416,14 +599,15 @@ objetivos = [
 largura_card = Inches(3.72)
 for i, (num, tit, corpo) in enumerate(objetivos):
     x = Inches(0.75) + i * (largura_card + Inches(0.28))
-    retangulo(s, x, Inches(2.35), largura_card, Inches(3.7), QUASE_BRANCO, arredondado=True)
-    texto(s, x + Inches(0.3), Inches(2.62), largura_card - Inches(0.6), Inches(0.9),
-          num, tamanho=34, cor=ROSA_FUNDO, negrito=True, fonte=FONTE)
-    retangulo(s, x + Inches(0.3), Inches(3.55), Inches(0.5), Pt(3), VERMELHO)
+    caixa = retangulo(s, x, Inches(2.35), largura_card, Inches(3.7), QUASE_BRANCO,
+                       linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+    caixa.line.width = Pt(1.5)
+    badge_numero(s, x + Inches(0.3), Inches(2.62), num)
+    retangulo(s, x + Inches(0.36), Inches(3.38), Inches(0.5), Pt(3), VERMELHO)
     texto(s, x + Inches(0.3), Inches(3.72), largura_card - Inches(0.6), Inches(0.5),
           tit, tamanho=18, cor=PRETO, negrito=True, fonte=FONTE)
     texto(s, x + Inches(0.3), Inches(4.28), largura_card - Inches(0.6), Inches(1.6),
-          corpo, tamanho=13, cor=CINZA, fonte=FONTE, espacamento=1.25)
+          corpo, tamanho=13, cor=PRETO, fonte=FONTE, espacamento=1.25)
 rodape(s, 3)
 
 # ============================================================ 4. OS DADOS
@@ -439,16 +623,18 @@ stats = [
 w_stat = Inches(2.85)
 for i, (valor, legenda) in enumerate(stats):
     x = Inches(0.75) + i * (w_stat + Inches(0.15))
-    retangulo(s, x, Inches(2.3), w_stat, Inches(2.0), QUASE_BRANCO, arredondado=True)
-    texto(s, x, Inches(2.62), w_stat, Inches(0.85), valor, tamanho=30, cor=VERMELHO,
+    retangulo(s, x, Inches(2.3), w_stat, Inches(2.0), QUASE_BRANCO,
+              linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+    texto(s, x, Inches(2.6), w_stat, Inches(0.85), valor, tamanho=36, cor=VERMELHO,
           negrito=True, alinhamento=PP_ALIGN.CENTER, fonte=FONTE)
-    texto(s, x + Inches(0.15), Inches(3.5), w_stat - Inches(0.3), Inches(0.7), legenda,
-          tamanho=11.5, cor=CINZA, alinhamento=PP_ALIGN.CENTER, fonte=FONTE, espacamento=1.15)
-texto(s, Inches(0.75), Inches(4.75), Inches(11.6), Inches(1.6),
-      "Microdados de largura fixa, exatamente como publicados pelo IBGE. Cada período baixado "
-      "com retentativa automática e validado por manifesto (checksum SHA-256 e contagem de "
-      "linhas), para detectar corrupção antes de qualquer análise.",
-      tamanho=14.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
+    texto(s, x + Inches(0.1), Inches(3.48), w_stat - Inches(0.2), Inches(0.75), legenda,
+          tamanho=13.5, cor=CINZA, negrito=True, alinhamento=PP_ALIGN.CENTER, fonte=FONTE,
+          espacamento=1.15)
+texto(s, Inches(0.75), Inches(4.75), Inches(11.6), Inches(1.6), [
+    "• Microdados de largura fixa, exatamente como publicados pelo IBGE",
+    "• Cada período baixado com retentativa automática",
+    "• Validado por manifesto (checksum SHA-256 + contagem de linhas) antes de qualquer análise",
+], tamanho=16.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
 
 # ============================================================ 5. PREPARAÇÃO
 s = nova_slide(BRANCO)
@@ -466,7 +652,8 @@ h_camada = Inches(1.55)
 for i, (nome, tit, corpo) in enumerate(camadas):
     x = Inches(0.9) + i * (w_camada + Inches(0.75))
     cor_fundo = [RGBColor(0xCD, 0x7F, 0x32), RGBColor(0xB8, 0xB8, 0xB8), VERMELHO][i]
-    retangulo(s, x, y_camada, w_camada, h_camada, QUASE_BRANCO, arredondado=True)
+    retangulo(s, x, y_camada, w_camada, h_camada, QUASE_BRANCO,
+              linha=True, cor_linha=CINZA_BORDA, arredondado=True)
     retangulo(s, x, y_camada, w_camada, Inches(0.42), cor_fundo, arredondado=True)
     texto(s, x, y_camada + Inches(0.07), w_camada, Inches(0.32), nome, tamanho=13.5, cor=BRANCO,
           negrito=True, alinhamento=PP_ALIGN.CENTER, fonte=FONTE, espacamento_letras=1.2)
@@ -484,8 +671,10 @@ gap_col = Inches(0.4)
 
 # esquerda: funil de filtragem Silver -> Gold
 x_esq = Inches(0.75)
-retangulo(s, x_esq, y_row2, w_col, h_row2, QUASE_BRANCO, arredondado=True)
-retangulo(s, x_esq, y_row2, Inches(0.06), h_row2, VERMELHO)
+retangulo(s, x_esq, y_row2, w_col, h_row2, QUASE_BRANCO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+retangulo(s, x_esq, y_row2 + Inches(0.12), Inches(0.06), h_row2 - Inches(0.24), VERMELHO,
+          arredondado=True)
 texto(s, x_esq + Inches(0.28), y_row2 + Inches(0.2), w_col - Inches(0.5), Inches(0.4),
       "DA SILVER À GOLD: O FILTRO", tamanho=12.5, cor=VERMELHO, negrito=True, fonte=FONTE,
       espacamento_letras=0.8)
@@ -502,7 +691,8 @@ texto(s, x_esq + Inches(0.28), y_row2 + Inches(1.62), w_col - Inches(0.5), Inche
 
 # direita: conceito de informal (OBS)
 x_dir = x_esq + w_col + gap_col
-retangulo(s, x_dir, y_row2, w_col, h_row2, ROSA_FUNDO, arredondado=True)
+retangulo(s, x_dir, y_row2, w_col, h_row2, ROSA_FUNDO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
 texto(s, x_dir + Inches(0.28), y_row2 + Inches(0.2), w_col - Inches(0.5), Inches(0.4),
       "OBS: O QUE É \"INFORMAL\" AQUI?", tamanho=12.5, cor=VERMELHO_ESCURO, negrito=True,
       fonte=FONTE, espacamento_letras=0.6)
@@ -528,8 +718,9 @@ texto(s, Inches(8.85), Inches(2.75), Inches(3.7), Inches(0.5), "com a condição
       tamanho=12.5, cor=CINZA, fonte=FONTE, espacamento=1.15)
 texto(s, Inches(8.85), Inches(3.5), Inches(3.75), Inches(0.4), "V de Cramér / ponto-bisserial",
       tamanho=11, cor=CINZA, fonte=FONTE)
-retangulo(s, Inches(8.85), Inches(4.0), Inches(3.75), Inches(1.85), QUASE_BRANCO, arredondado=True)
-retangulo(s, Inches(8.85), Inches(4.0), Inches(0.06), Inches(1.85), VERMELHO)
+retangulo(s, Inches(8.85), Inches(4.0), Inches(3.75), Inches(1.85), QUASE_BRANCO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+retangulo(s, Inches(8.85), Inches(4.12), Inches(0.06), Inches(1.61), VERMELHO, arredondado=True)
 texto(s, Inches(9.13), Inches(4.15), Inches(3.3), Inches(0.4), "O TRABALHADOR INFORMAL, EM NÚMEROS",
       tamanho=11.5, cor=PRETO, negrito=True, fonte=FONTE, espacamento=1.05)
 texto(s, Inches(9.13), Inches(4.58), Inches(3.3), Inches(1.2), [
@@ -537,58 +728,164 @@ texto(s, Inches(9.13), Inches(4.58), Inches(3.3), Inches(1.2), [
     "35% moram no Nordeste (20% entre os formais)",
     "Renda mediana 42% menor: R$ 1.400 x R$ 2.400",
 ], tamanho=10.8, cor=PRETO, fonte=FONTE, espacamento=1.25)
-retangulo(s, Inches(0.75), Inches(6.0), Inches(11.83), Inches(0.85), QUASE_BRANCO, arredondado=True)
-texto(s, Inches(1.0), Inches(6.1), Inches(9.8), Inches(0.25),
+retangulo(s, Inches(0.75), Inches(5.92), Inches(11.83), Inches(0.98), QUASE_BRANCO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+texto(s, Inches(1.0), Inches(6.02), Inches(9.8), Inches(0.25),
       "DECISÃO DE VARIÁVEIS, A MAIS DIFÍCIL DO PROJETO", tamanho=10.5, cor=VERMELHO,
       negrito=True, fonte=FONTE, espacamento_letras=0.7)
-texto(s, Inches(1.0), Inches(6.36), Inches(9.7), Inches(0.45),
-      "Das quase 420 variáveis da PNAD, 22 entraram no pré-processamento por relevância "
-      "direta. Dessas, 15 seguiram para o modelo: 2 delas (sexo e raça) por escopo "
-      "obrigatório do projeto, não por força estatística.",
-      tamanho=10.5, cor=PRETO, fonte=FONTE, espacamento=1.15)
+texto(s, Inches(1.0), Inches(6.28), Inches(11.3), Inches(0.6), [
+    "• 22 das 420 variáveis da PNAD entraram no pré-processamento por relevância direta; 15 seguiram para o modelo",
+    "• Sexo e raça entraram por escopo obrigatório do projeto (RF-06), não por força estatística",
+    "• Fora do modelo: variáveis que constroem o próprio alvo, renda (vazamento circular) e chaves de deduplicação",
+], tamanho=9.8, cor=PRETO, fonte=FONTE, espacamento=1.2)
 
 # ============================================================ 7. A SOLUÇÃO
+# Diagrama de arquitetura de dados de verdade (referencia: pills marcando
+# cada zona + icones conectados por setas + logo real só nas pontas onde
+# ha uma ferramenta de fato nomeada) — não mais caixas genericas de
+# passo-a-passo. Pills em VERMELHO (identidade do projeto); DOURADO fica
+# reservado só pro destaque estrategico da etapa MODELO (assunto dos
+# proximos slides). Claude/AIOX aparecem so como nota leve de
+# "auxiliares" (embaixo do Python, nao mais uma faixa/explicacao grande).
 s = nova_slide(BRANCO)
 cabecalho_padrao(s, 7, "A Solução", "Um pipeline completo, do dado bruto à predição")
-etapas = ["Ingestão", "Pré-\nprocessamento", "Transformação", "Análise\nexploratória",
-          "Modelagem\n& ML", "Interpretação\n& equidade"]
-w_etapa = Inches(1.72)
-gap = Inches(0.2)
+
 x0 = Inches(0.75)
-y0 = Inches(2.85)
-for i, nome in enumerate(etapas):
-    x = x0 + i * (w_etapa + gap)
-    etapa_pipeline(s, x, y0, w_etapa, Inches(1.5), f"{i + 1:02d}", nome,
-                   cor_fundo=(VERMELHO if i == 4 else QUASE_BRANCO),
-                   cor=(BRANCO if i == 4 else PRETO))
-    if i < len(etapas) - 1:
-        seta_horizontal(s, x + w_etapa + Inches(0.02), y0 + Inches(0.55), gap - Inches(0.04), Inches(0.4))
-texto(s, Inches(0.75), Inches(4.85), Inches(11.6), Inches(0.4), "FERRAMENTAS", tamanho=12,
-      cor=CINZA, negrito=True, fonte=FONTE, espacamento_letras=1.2)
-texto(s, Inches(0.75), Inches(5.25), Inches(11.6), Inches(0.6),
-      "Python · pandas · scikit-learn · SHAP · arquitetura Medallion orientada a classes "
-      "(`Etapa` → `Pipeline`), cada etapa executável isoladamente ou em cadeia.",
-      tamanho=14, cor=PRETO, fonte=FONTE, espacamento=1.25)
+w_a, w_c, gap_zona = Inches(1.7), Inches(2.75), Inches(0.55)
+w_b = Inches(11.83) - w_a - w_c - 2 * gap_zona
+x_b = x0 + w_a + gap_zona
+x_c = x_b + w_b + gap_zona
+y_pill, h_pill = Inches(1.95), Inches(0.42)
+y_icone, h_icone = Inches(2.55), Inches(0.6)
+y_rotulo, h_rotulo = Inches(3.22), Inches(0.25)
+y_seta = Inches(2.71)
+pad = Inches(0.15)
+y_card, h_card = Inches(1.8), Inches(1.82)
+
+# --- blocos de fundo (cada zona vira um "card", nao fica so jogado no
+# branco) — mesma linguagem visual (fundo + borda) do resto do deck
+for x_zona, w_zona in ((x0, w_a), (x_b, w_b), (x_c, w_c)):
+    retangulo(s, x_zona - pad, y_card, w_zona + 2 * pad, h_card, QUASE_BRANCO,
+              linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+# setas conectando os 3 cards, no vao entre eles
+seta_horizontal(s, x0 + w_a + pad + Inches(0.02), y_seta, gap_zona - 2 * pad - Inches(0.04), Inches(0.28))
+seta_horizontal(s, x_b + w_b + pad + Inches(0.02), y_seta, gap_zona - 2 * pad - Inches(0.04), Inches(0.28))
+
+# --- zona A: fonte dos dados
+pill_zona(s, x0, y_pill, w_a, h_pill, "Fonte")
+logo_ibge = imagem_centrada(s, LOGO_IBGE, x0 + Inches(0.5), Inches(2.6), h=Inches(0.5))
+texto(s, x0, y_rotulo, w_a, h_rotulo, "PNAD Contínua", tamanho=9.5, cor=PRETO, negrito=True,
+      alinhamento=PP_ALIGN.CENTER, fonte=FONTE)
+
+# --- zona B: pipeline Python — Bronze/Silver/Gold (dados) + EDA + Modelo/Resultados
+# (destaque vermelho cobre Modelo+Resultados: sao os "proximos 3 slides"
+# mencionados na transicao abaixo, junto com a Interpretacao)
+retangulo(s, x_b, y_pill, w_b, h_pill, PRETO, arredondado=True)
+logo_python_pill = imagem_centrada(s, LOGO_PYTHON, x_b + Inches(0.18), y_pill + Inches(0.06), h=Inches(0.3))
+texto(s, x_b + Inches(0.62), y_pill, w_b - Inches(0.75), h_pill, "Pipeline Python",
+      tamanho=11.5, cor=BRANCO, negrito=True, fonte=FONTE, espacamento_letras=0.3,
+      ancora=MSO_ANCHOR.MIDDLE)
+
+slot_w = w_b / 5
+etapas_dados = [
+    ("BRONZE", RGBColor(0xCD, 0x7F, 0x32)),
+    ("SILVER", RGBColor(0xB8, 0xB8, 0xB8)),
+    ("GOLD", DOURADO),
+    ("EDA", PRETO),
+]
+for i, (nome, cor_icone) in enumerate(etapas_dados):
+    x_slot = x_b + i * slot_w
+    icone_x = x_slot + (slot_w - Inches(0.45)) / 2
+    if nome == "EDA":
+        icone_lupa(s, icone_x, y_icone, Inches(0.45), Inches(0.55), cor_icone)
+    else:
+        icone_cilindro(s, icone_x, y_icone, Inches(0.45), Inches(0.55), cor_icone)
+    texto(s, x_slot, y_rotulo, slot_w, h_rotulo, nome, tamanho=9.5, cor=PRETO, negrito=True,
+          alinhamento=PP_ALIGN.CENTER, fonte=FONTE)
+    if i < len(etapas_dados) - 1:
+        seta_horizontal(s, x_b + (i + 1) * slot_w - Inches(0.13), y_seta, Inches(0.26), Inches(0.28))
+
+# azulejo vermelho do Modelo — centralizado no ultimo slot. A seta ate ele
+# e calculada a partir do proprio tile_x (nao da formula generica de
+# fronteira de slot) pra nunca encostar/ficar por baixo do azulejo — bug
+# da rodada anterior, onde a seta ficava coberta pelo retangulo do tile.
+tile_w, tile_h = Inches(1.02), Inches(1.08)
+tile_x = x_b + 4 * slot_w + (slot_w - tile_w) / 2
+tile_y = y_icone - Inches(0.08)
+seta_horizontal(s, x_b + 4 * slot_w - Inches(0.26), y_seta, tile_x - (x_b + 4 * slot_w - Inches(0.26))
+                 - Inches(0.06), Inches(0.28))
+retangulo(s, tile_x, tile_y, tile_w, tile_h, VERMELHO, arredondado=True)
+icone_barras(s, tile_x + (tile_w - Inches(0.5)) / 2, y_icone, Inches(0.5), h_icone, BRANCO)
+texto(s, x_b + 4 * slot_w, y_rotulo, slot_w, h_rotulo, "MODELO", tamanho=9.5, cor=BRANCO,
+      negrito=True, alinhamento=PP_ALIGN.CENTER, fonte=FONTE)
+
+# --- zona C: entrega = os resultados (nao um "boletim" generico separado)
+pill_zona(s, x_c, y_pill, w_c, h_pill, "Entrega")
+icone_check(s, x_c + (w_c - Inches(0.6)) / 2, y_icone - Inches(0.05), Inches(0.6), Inches(0.6),
+            cor_fundo=VERMELHO, cor_check=BRANCO)
+texto(s, x_c, y_rotulo, w_c, h_rotulo, "Resultados", tamanho=9.5, cor=PRETO, negrito=True,
+      alinhamento=PP_ALIGN.CENTER, fonte=FONTE)
+
+texto(s, x0, Inches(3.75), Inches(11.83), Inches(0.3),
+      "pandas · scikit-learn · SHAP · classes `Etapa` → `Pipeline`, cada etapa executável "
+      "isoladamente ou em cadeia.", tamanho=11.5, cor=PRETO, fonte=FONTE,
+      ancora=MSO_ANCHOR.MIDDLE)
+
+# --- nota leve: Claude/AIOX so como auxiliares no desenvolvimento (nao mais
+# uma faixa/explicacao grande — pedido do usuario, o foco aqui e o processo)
+imagem_centrada(s, LOGO_CLAUDE, x0, Inches(4.08), h=Inches(0.28))
+texto_com_links(s, x0 + Inches(0.4), Inches(4.06), Inches(9), Inches(0.32), [
+    ("Auxiliares no desenvolvimento: ", None),
+    ("Claude Code", "https://claude.com/claude-code"),
+    (" · ", None),
+    ("framework AIOX", "https://github.com/SynkraAI/aiox-core"),
+], tamanho=10.5, cor=CINZA, ancora=MSO_ANCHOR.MIDDLE)
+
+# --- resumo curto da arquitetura, em bullets (nao mais uma chamada pro
+# proximo slide)
+texto(s, x0, Inches(4.75), Inches(11.83), Inches(1.3), [
+    "• Dados brutos do IBGE, tratados em três camadas — Bronze, Silver, Gold",
+    "• Análise exploratória revela os sinais mais fortes de informalidade",
+    "• Modelo treinado, validado e interpretável via SHAP",
+], tamanho=13.5, cor=PRETO, fonte=FONTE, espacamento=1.35)
 
 # ============================================================ 8. CONSTRUÇÃO DO MODELO
 s = nova_slide(BRANCO)
 cabecalho_padrao(s, 8, "Modelagem",
                  "Três modelos avaliados sob a mesma regra de validação")
 modelos_txt = [
-    ("Regressão Logística", "Baseline interpretável. Coeficiente de cada variável é direto de explicar, sanity check dos outros dois."),
-    ("Random Forest", "Robusto, custo controlado por amostra por árvore. Ainda assim, o mais lento dos três em treino."),
-    ("HistGradientBoosting", "Lida nativamente com categórica e valor nulo. É também o mais rápido dos dois modelos fortes."),
+    ("Regressão Logística", ["• Baseline interpretável", "• Sanity check dos outros dois modelos"]),
+    ("Random Forest", ["• Robusto, custo controlado por amostra/árvore", "• O mais lento dos três em treino"]),
+    ("HistGradientBoosting", ["• Lida nativamente com categórica e nulo", "• O mais rápido dos dois modelos fortes"]),
 ]
 w_m = Inches(3.72)
 for i, (tit, corpo) in enumerate(modelos_txt):
     x = Inches(0.75) + i * (w_m + Inches(0.28))
-    card(s, x, Inches(2.3), w_m, Inches(2.15), tit, corpo, tam_titulo=15.5, tam_corpo=12.5)
-retangulo(s, Inches(0.75), Inches(4.85), Inches(11.83), Inches(1.35), ROSA_FUNDO, arredondado=True)
-texto(s, Inches(1.05), Inches(5.05), Inches(2.6), Inches(1.0), "SPLIT\nTEMPORAL", tamanho=15,
-      cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento=1.1)
-texto(s, Inches(3.9), Inches(5.02), Inches(8.4), Inches(1.1),
-      "Treino: 2023–2024  →  Teste: 2025 completo. Nunca ao acaso: a PNAD é um painel "
-      "rotativo, e um split aleatório vazaria a mesma pessoa entre treino e teste.",
+    card(s, x, Inches(2.3), w_m, Inches(2.15), tit, corpo, tam_titulo=15.5, tam_corpo=13)
+
+# --- split temporal: virou uma linha do tempo visual (destaque pedido pelo
+# professor, ja que essa caixa mostra a estrategia de validacao do projeto)
+y_split = Inches(4.75)
+h_split = Inches(1.7)
+retangulo(s, Inches(0.75), y_split, Inches(11.83), h_split, ROSA_FUNDO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
+texto(s, Inches(1.05), y_split + Inches(0.2), Inches(2.5), Inches(0.9), "SPLIT\nTEMPORAL", tamanho=17,
+      cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento=1.05)
+
+x_bar, y_bar = Inches(3.75), y_split + Inches(0.3)
+w_bar, h_bar = Inches(7.9), Inches(0.55)
+w_treino = Emu(int(w_bar * 2 / 3))
+w_teste = w_bar - w_treino
+retangulo(s, x_bar, y_bar, w_treino, h_bar, PRETO)
+retangulo(s, x_bar + w_treino, y_bar, w_teste, h_bar, VERMELHO)
+texto(s, x_bar, y_bar, w_treino, h_bar, "2023 – 2024  ·  TREINO", tamanho=12.5, cor=BRANCO,
+      negrito=True, alinhamento=PP_ALIGN.CENTER, fonte=FONTE, ancora=MSO_ANCHOR.MIDDLE)
+texto(s, x_bar + w_treino, y_bar, w_teste, h_bar, "2025 · TESTE", tamanho=12.5, cor=BRANCO,
+      negrito=True, alinhamento=PP_ALIGN.CENTER, fonte=FONTE, ancora=MSO_ANCHOR.MIDDLE)
+
+texto(s, x_bar, y_bar + Inches(0.7), w_bar, Inches(0.6),
+      "Nunca ao acaso: a PNAD é um painel rotativo, e um split aleatório vazaria a mesma "
+      "pessoa entre treino e teste.",
       tamanho=13.5, cor=PRETO, fonte=FONTE, espacamento=1.25, ancora=MSO_ANCHOR.MIDDLE)
 
 # ============================================================ 9. INTERPRETABILIDADE / EQUIDADE
@@ -600,7 +897,8 @@ texto(s, Inches(0.85), Inches(5.75), Inches(6.6), Inches(0.5),
       "SHAP: o que mais pesou na decisão do modelo campeão", tamanho=11.5, cor=CINZA,
       fonte=FONTE, espacamento=1.1)
 imagem_centrada(s, ASSETS_GRAFICOS / "fig_equidade.png", Inches(8.1), Inches(2.15), h=Inches(3.15))
-retangulo(s, Inches(7.95), Inches(5.55), Inches(4.65), Inches(1.35), ROSA_FUNDO, arredondado=True)
+retangulo(s, Inches(7.95), Inches(5.55), Inches(4.65), Inches(1.35), ROSA_FUNDO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
 texto(s, Inches(8.2), Inches(5.72), Inches(4.2), Inches(1.1),
       "Recall 12 p.p. menor para o grupo Amarelos (n = 4.214): um sinal de atenção real, "
       "registrado no Model Card, não motivo para descartar o modelo.",
@@ -617,24 +915,36 @@ linhas_tab = [
     ["Random Forest", "0.8355", "0.8123", "0.8446", "0.8281", "0.9166", "2171.53"],
     ["Regressão Logística", "0.8259", "0.7995", "0.8397", "0.8191", "0.9011", "41.67"],
 ]
-tabela_comparacao(s, Inches(0.75), Inches(2.05), Inches(11.83), Inches(1.55), cabecalhos_tab,
-                   linhas_tab, largura_col0=Inches(3.0), linha_destaque="HistGradientBoosting")
-texto(s, Inches(0.75), Inches(3.85), Inches(7.9), Inches(0.4), "HistGradientBoosting é o campeão",
-      tamanho=13.5, cor=PRETO, negrito=True, fonte=FONTE)
-texto(s, Inches(0.75), Inches(4.3), Inches(7.9), Inches(2.5),
-      "De cada 100 trabalhadores informais reais no teste, o modelo identifica corretamente 84, "
-      "com a mesma performance em treino e teste, sem overfitting. É também o mais rápido dos "
-      "dois modelos fortes: 179s de treino contra 2.172s (36 min) do Random Forest, 12 vezes "
-      "mais lento por um ganho de apenas 0,9 ponto de AUC. Tempo de treino também é custo de "
-      "engenharia, não só de máquina.",
-      tamanho=13.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
-imagem_centrada(s, ASSETS_GRAFICOS / "fig_roc.png", Inches(9.15), Inches(3.85), w=Inches(3.3))
+tabela10 = tabela_comparacao(
+    s, Inches(0.75), Inches(1.95), Inches(11.83), Inches(1.4), cabecalhos_tab, linhas_tab,
+    largura_col0=Inches(2.6), linha_destaque="HistGradientBoosting", tamanho=15, tamanho_cabecalho=13.5,
+)
+# realces pontuais em dourado (fonte, nao a celula) — pedido do usuario: o
+# tempo do Random Forest (é o lento), o AUC do campeao e o precision da
+# Regressao Logistica. cabecalhos_tab = [Modelo,Accuracy,Precision,Recall,F1,AUC-ROC,Tempo]
+for r, c in ((1, 5), (2, 6), (3, 2)):
+    run_destaque = tabela10.cell(r, c).text_frame.paragraphs[0].runs[0]
+    run_destaque.font.color.rgb = DOURADO
+    run_destaque.font.bold = True
+
+# texto reduzido a um resumo curto: numa TV/projetor o grafico e que
+# precisa chamar atencao, nao um bloco de texto competindo com ele
+texto(s, Inches(0.75), Inches(3.55), Inches(6.6), Inches(0.4), "Campeão: HistGradientBoosting",
+      tamanho=15, cor=PRETO, negrito=True, fonte=FONTE)
+texto(s, Inches(0.75), Inches(4.02), Inches(6.6), Inches(1.6), [
+    "• Acerta 84 de cada 100 informais reais, sem overfitting",
+    "• O mais rápido dos dois modelos fortes: 3 min contra 36 min do Random Forest",
+], tamanho=14, cor=PRETO, negrito=True, fonte=FONTE, espacamento=1.3)
+imagem_centrada(s, ASSETS_GRAFICOS / "fig_roc.png", Inches(7.75), Inches(3.5), h=Inches(3.4))
 
 # ============================================================ 11. CONCLUSÃO GERAL
+# Conclusao sobre TODO o trabalho (problema + pipeline + modelo), nao so o
+# modelo — 3 blocos lado a lado no lugar dos 2 anteriores.
 s = nova_slide(BRANCO)
 cabecalho_padrao(s, 11, "Conclusão Geral",
-                 "Sobre o modelo, e sobre o problema que ele tenta resolver")
-retangulo(s, Inches(0.75), Inches(1.95), Inches(11.83), Inches(0.95), ROSA_FUNDO, arredondado=True)
+                 "Sobre a informalidade, sobre o processo, e se o objetivo foi atingido")
+retangulo(s, Inches(0.75), Inches(1.95), Inches(11.83), Inches(0.95), ROSA_FUNDO,
+          linha=True, cor_linha=CINZA_BORDA, arredondado=True)
 texto(s, Inches(1.05), Inches(1.95), Inches(11.25), Inches(0.95),
       "A informalidade não é um detalhe estatístico: é quase metade do mercado de trabalho "
       "brasileiro, distribuída de forma desigual entre região, setor e cor. Foi esse padrão "
@@ -642,23 +952,55 @@ texto(s, Inches(1.05), Inches(1.95), Inches(11.25), Inches(0.95),
       tamanho=13.5, cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento=1.2,
       ancora=MSO_ANCHOR.MIDDLE)
 
-retangulo(s, Inches(0.75), Inches(3.15), Inches(5.75), Inches(3.3), QUASE_BRANCO, arredondado=True)
-texto(s, Inches(1.05), Inches(3.4), Inches(5.2), Inches(0.5), "O QUE FUNCIONOU", tamanho=13,
-      cor=VERMELHO, negrito=True, fonte=FONTE, espacamento_letras=1.1)
-texto(s, Inches(1.05), Inches(3.9), Inches(5.15), Inches(2.4), [
-    "• Pipeline reprodutível ponta a ponta, do dado bruto do IBGE até uma predição interpretável",
-    "• Modelo com bom poder preditivo (AUC 0,93) e sem overfitting relevante",
-    "• Interpretabilidade real via SHAP, não uma caixa-preta",
-], tamanho=12.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
+y_col, h_col, w_col, gap_col = Inches(3.15), Inches(3.3), Inches(3.75), Inches(0.29)
+x_a = Inches(0.75)
+x_b = x_a + w_col + gap_col
+x_c = x_b + w_col + gap_col
 
-retangulo(s, Inches(6.85), Inches(3.15), Inches(5.75), Inches(3.3), ROSA_FUNDO, arredondado=True)
-texto(s, Inches(7.15), Inches(3.4), Inches(5.2), Inches(0.5), "PRÓXIMOS PASSOS", tamanho=13,
-      cor=VERMELHO_ESCURO, negrito=True, fonte=FONTE, espacamento_letras=1.1)
-texto(s, Inches(7.15), Inches(3.9), Inches(5.15), Inches(2.4), [
-    "• Corrigir a disparidade de recall no grupo Amarelos (reponderação ou threshold por grupo)",
-    "• Usar o peso amostral da PNAD (V1028) na avaliação, hoje em aberto",
-    "• Monitorar novas safras trimestrais e o ganho marginal do campeão frente ao Random Forest",
-], tamanho=12.5, cor=PRETO, fonte=FONTE, espacamento=1.3)
+# Cada card agora tem um "gancho" visual (estatistica grande) em vez de
+# so texto corrido — pesquisa rapida sobre slides de conclusao confirma:
+# alto contraste, 1 estatistica marcante por bloco, bullets escaneaveis
+# com o ponto principal em negrito (quem so bate o olho ja entende).
+
+
+def _caixa_conclusao(x, cor_titulo, titulo_txt):
+    retangulo(s, x, y_col, w_col, h_col, QUASE_BRANCO, linha=True, cor_linha=CINZA_BORDA,
+              arredondado=True)
+    retangulo(s, x, y_col + Inches(0.12), Inches(0.06), h_col - Inches(0.24), cor_titulo,
+              arredondado=True)
+    texto(s, x + Inches(0.28), y_col + Inches(0.22), w_col - Inches(0.5), Inches(0.3),
+          titulo_txt, tamanho=13, cor=PRETO, negrito=True, fonte=FONTE, espacamento_letras=0.4)
+
+
+def _stat_card(x, valor, cor_valor, legenda):
+    texto(s, x + Inches(0.28), y_col + Inches(0.58), w_col - Inches(0.5), Inches(0.48),
+          valor, tamanho=30, cor=cor_valor, negrito=True, fonte=FONTE_DESTAQUE)
+    texto(s, x + Inches(0.28), y_col + Inches(1.06), w_col - Inches(0.5), Inches(0.42),
+          legenda, tamanho=10.3, cor=PRETO, fonte=FONTE, espacamento=1.15)
+
+
+_caixa_conclusao(x_a, VERMELHO, "SOBRE A INFORMALIDADE")
+_stat_card(x_a, "47,6%", VERMELHO, "dos ocupados analisados estão na informalidade")
+bullets_destaque(s, x_a + Inches(0.28), y_col + Inches(1.52), w_col - Inches(0.5), Inches(1.65), [
+    ("Concentrada ", "em quem não tem instrução, na agropecuária e no Nordeste"),
+    ("Renda 42% menor", " — é consequência, não causa"),
+], tamanho=11, espacamento=1.3)
+
+_caixa_conclusao(x_b, VERMELHO_ESCURO, "DIFICULDADES DO PROJETO")
+_stat_card(x_b, "5,7M", VERMELHO_ESCURO, "linhas na base bruta — volume que já era um desafio de engenharia")
+bullets_destaque(s, x_b + Inches(0.28), y_col + Inches(1.52), w_col - Inches(0.5), Inches(1.65), [
+    ("Volume: ", "trabalhar com quase 6 milhões de linhas exigiu cuidado de performance em cada etapa"),
+    ("Seleção de variáveis: ", "decidir quais das 420 podiam entrar, já pensando no modelo, sem colar a resposta"),
+    ("Peso amostral: ", "o desenho complexo da PNAD ainda não entrou na avaliação"),
+], tamanho=10.5, espacamento=1.25)
+
+_caixa_conclusao(x_c, VERMELHO, "O OBJETIVO FOI ATINGIDO?")
+_stat_card(x_c, "3 de 3", VERMELHO, "objetivos atingidos: prever, explicar, medir equidade")
+bullets_destaque(s, x_c + Inches(0.28), y_col + Inches(1.52), w_col - Inches(0.5), Inches(1.65), [
+    ("Prever — ", "AUC 0,93 no ano que o modelo nunca viu"),
+    ("Explicar — ", "SHAP confirma os mesmos fatores da EDA"),
+    ("Medir equidade — ", "sim, e revelou um problema real"),
+], tamanho=11, espacamento=1.25, marcador="✓ ")
 
 # ============================================================ 12. ENCERRAMENTO
 s = nova_slide(VERMELHO)
@@ -670,9 +1012,10 @@ texto(s, Inches(0.75), Inches(3.85), Inches(9), Inches(0.7), "Perguntas?", taman
 linha_divisoria(s, Inches(0.75), Inches(5.5), Inches(4.2), cor=RGBColor(0xFF, 0xB3, 0xC0))
 texto(s, Inches(0.75), Inches(5.7), Inches(9), Inches(1.2), INTEGRANTES, tamanho=13.5, cor=BRANCO,
       fonte=FONTE, espacamento=1.35)
-texto(s, LARGURA - Inches(4.4), ALTURA - Inches(0.6), Inches(3.8), Inches(0.35),
-      "github.com/gui-ramon/pipeline-hands-on-engenharia-de-dados", tamanho=9.5,
-      cor=RGBColor(0xFF, 0xD8, 0xDD), alinhamento=PP_ALIGN.RIGHT, fonte=FONTE)
+texto_com_links(s, LARGURA - Inches(4.4), ALTURA - Inches(0.6), Inches(3.8), Inches(0.35), [
+    ("github.com/gui-ramon/pipeline-hands-on-engenharia-de-dados",
+     "https://github.com/gui-ramon/pipeline-hands-on-engenharia-de-dados"),
+], tamanho=9.5, cor=RGBColor(0xFF, 0xD8, 0xDD), alinhamento=PP_ALIGN.RIGHT)
 
 # ======================================================================
 # SLIDES OCULTOS — material de apoio para as perguntas (fora dos 10 min)
@@ -788,12 +1131,17 @@ for r in range(1, len(linhas_features) + 1):
     tabela_feat.cell(r, 2).text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
     for c in range(3):
         tabela_feat.cell(r, c).text_frame.paragraphs[0].runs[0].font.size = Pt(9.5)
-card(s, Inches(8.35), Inches(1.95), Inches(4.25), Inches(4.55), "O que ficou de fora, e por quê",
-     "VD4009/V4019/VD4012/VD4002: constroem o próprio alvo (vazamento). VD4016/VD4017 "
-     "(renda): vazamento circular, só usadas em gráfico de EDA. V3002 (frequenta escola): "
-     "associação quase nula (0,003). UPA/V1008/V1014/V2003: só chave de deduplicação, sem "
-     "relação causal. V1028 (peso amostral): reservado, não é feature. Ano/Trimestre: "
-     "vazariam o split temporal.", tam_titulo=13.5, tam_corpo=11.5)
+x_fora, y_fora, w_fora, h_fora = Inches(8.35), Inches(1.95), Inches(4.25), Inches(4.55)
+card(s, x_fora, y_fora, w_fora, h_fora, "O que ficou de fora, e por quê", "",
+     tam_titulo=13.5)
+bullets_destaque(s, x_fora + Inches(0.28), y_fora + Inches(0.75), w_fora - Inches(0.5),
+                  h_fora - Inches(0.95), [
+    ("Já diz a resposta: ", "tem variável que já diz se a pessoa é informal. Usar ela seria trapaça"),
+    ("Consequência, não causa: ", "a renda ficou de fora por isso"),
+    ("Só identifica: ", "tem código que só serve pra achar pessoa ou domicílio, não diz nada sobre o problema"),
+    ("Coisa da pesquisa: ", "ano, trimestre e peso amostral não são da pessoa"),
+    ("Quase não muda nada: ", "ir à escola quase não muda a chance de ser informal"),
+], tamanho=12.5, espacamento=1.25)
 
 # ------------------------------------------------------------ D. Matrizes de confusão
 s = nova_slide(BRANCO)
@@ -843,11 +1191,11 @@ texto(s, x_lat + Inches(0.25), Inches(4.3), w_lat - Inches(0.5), Inches(0.55),
       "mais informalidade na agropecuária, pesca e aquicultura (24% x 6% entre os formais)",
       tamanho=10.5, cor=PRETO, fonte=FONTE, espacamento=1.15)
 
-retangulo(s, x_lat, Inches(5.05), w_lat, Inches(1.7), QUASE_BRANCO, arredondado=True)
-texto(s, x_lat + Inches(0.25), Inches(5.15), Inches(3.5), Inches(0.25), "RENDA MEDIANA",
+retangulo(s, x_lat, Inches(4.95), w_lat, Inches(2.0), QUASE_BRANCO, arredondado=True)
+texto(s, x_lat + Inches(0.25), Inches(5.05), Inches(3.5), Inches(0.22), "RENDA MEDIANA",
       tamanho=10, cor=CINZA, negrito=True, fonte=FONTE, espacamento_letras=0.6)
-imagem_centrada(s, ASSETS_GRAFICOS / "fig_eda_renda.png", x_lat + Inches(0.25), Inches(5.42), w=Inches(2.1))
-texto(s, x_lat + Inches(0.25), Inches(6.1), w_lat - Inches(0.5), Inches(0.55),
+imagem_centrada(s, ASSETS_GRAFICOS / "fig_eda_renda.png", x_lat + Inches(0.25), Inches(5.28), w=Inches(3.9))
+texto(s, x_lat + Inches(0.25), Inches(6.62), w_lat - Inches(0.5), Inches(0.32),
       "Informal ganha 42% menos. Não entra no modelo: é consequência da informalidade, não causa.",
       tamanho=10, cor=PRETO, fonte=FONTE, espacamento=1.15)
 
@@ -859,9 +1207,9 @@ texto(s, x_lat + Inches(0.25), Inches(6.1), w_lat - Inches(0.5), Inches(0.55),
 botao_mais(s5, Inches(5.92), Inches(4.3), s13)
 botao_mais(s5, Inches(12.04), Inches(4.3), s14)
 
-# slide 6: destaques do trabalhador informal (gráficos da EDA) e decisão de variáveis
+# slide 6: destaques do trabalhador informal (gráficos da EDA) — decisão de
+# variáveis passou a ser sequencial no próprio slide (sem hiperlink pro apêndice)
 botao_mais(s6, Inches(12.12), Inches(4.08), s17)
-botao_mais(s6, Inches(12.03), Inches(6.225), s15)
 
 # slide 10: matrizes de confusão
 botao_mais(s10, Inches(12.03), Inches(1.5), s16, rotulo="MATRIZES DE CONFUSÃO")

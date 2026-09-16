@@ -140,13 +140,18 @@ def grafico_roc(y_teste, predicoes):
     from sklearn.metrics import auc as auc_fn
 
     estilos = {
-        "HistGradientBoosting": (VERMELHO, "-", 3.4),
-        "Random Forest": (PRETO, "--", 2.2),
-        "Regressão Logística": (CINZA, ":", 2.2),
+        "HistGradientBoosting": (VERMELHO, "-", 5.5),
+        "Random Forest": (PRETO, "--", 4.0),
+        "Regressão Logística": (CINZA, ":", 4.0),
     }
 
-    fig, ax = plt.subplots(figsize=(6.6, 6.0))
-    ax.plot([0, 1], [0, 1], color=CINZA_CLARO, linewidth=1.6, zorder=1)
+    # o grafico e o elemento que mais precisa chamar atencao no slide de
+    # resultados (apresentacao em TV/projetor — se ficar pequeno, ninguem
+    # le) — figsize bem mais largo que alto (nao 1:1) pra render maior
+    # dentro da altura disponivel, com fontes bem acima do "normal" de
+    # matplotlib, ja que o PNG e exibido no slide menor que o nativo.
+    fig, ax = plt.subplots(figsize=(8.0, 5.8))
+    ax.plot([0, 1], [0, 1], color=CINZA_CLARO, linewidth=2.6, zorder=1)
 
     for nome, (cor, estilo, largura) in estilos.items():
         fpr, tpr, _ = roc_curve(y_teste, predicoes[nome]["proba"])
@@ -160,10 +165,10 @@ def grafico_roc(y_teste, predicoes):
         ax.spines[spine].set_visible(False)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.set_xlabel("Taxa de falsos positivos", fontsize=12)
-    ax.set_ylabel("Taxa de verdadeiros positivos", fontsize=12)
-    ax.tick_params(labelsize=11)
-    ax.legend(loc="lower right", fontsize=11.5, frameon=False)
+    ax.set_xlabel("Taxa de falsos positivos", fontsize=24)
+    ax.set_ylabel("Taxa de verdadeiros positivos", fontsize=24)
+    ax.tick_params(labelsize=20)
+    ax.legend(loc="lower right", fontsize=18, frameon=False)
     fig.tight_layout()
     salvar(fig, "fig_roc.png")
 
@@ -226,8 +231,8 @@ def grafico_indice_concentracao():
     razoes = [r for _, r in itens]
     logs = [math.log2(r) for r in razoes]
 
-    CINZA_BARRA = "#D3D3D3"
-    CINZA_TXT = "#9E9E9E"
+    CINZA_BARRA = "#7A7A7A"
+    CINZA_TXT = "#4D4D4D"
     n = len(categorias)
     destaque_topo = {0, 1}
     destaque_base = {n - 1}
@@ -288,19 +293,19 @@ def grafico_eda_renda():
     grupos = ["Formal", "Informal"]
     valores = [2400, 1400]
     cores = [PRETO, VERMELHO]
-    fig, ax = plt.subplots(figsize=(4.6, 1.35))
+    fig, ax = plt.subplots(figsize=(6.6, 2.15))
     barras = ax.barh(grupos, valores, color=cores, height=0.55, zorder=3)
     ax.invert_yaxis()
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.set_xticks([])
-    ax.tick_params(axis="y", length=0, labelsize=13)
+    ax.tick_params(axis="y", length=0, labelsize=18)
     max_val = max(valores)
     ax.set_xlim(0, max_val * 1.5)
     for barra, valor in zip(barras, valores):
         ax.text(barra.get_width() + max_val * 0.03, barra.get_y() + barra.get_height() / 2,
                  f"R$ {valor:,.0f}".replace(",", "."), va="center", ha="left",
-                 fontsize=13, fontweight="bold", color=PRETO)
+                 fontsize=19, fontweight="bold", color=PRETO)
     fig.tight_layout()
     salvar(fig, "fig_eda_renda.png")
 
@@ -317,15 +322,15 @@ def grafico_equidade():
         ax.spines[spine].set_visible(False)
     ax.spines["bottom"].set_color(CINZA_CLARO)
     ax.set_yticks([])
-    ax.tick_params(axis="x", labelsize=13)
+    ax.tick_params(axis="x", labelsize=16)
     for barra, valor in zip(barras, valores):
         ax.text(
             barra.get_x() + barra.get_width() / 2,
             barra.get_height() + 0.03,
             f"{valor:.0%}",
-            ha="center", va="bottom", fontsize=14, fontweight="bold", color=PRETO,
+            ha="center", va="bottom", fontsize=18, fontweight="bold", color=PRETO,
         )
-    ax.set_title("Recall: HistGradientBoosting", fontsize=11.5, color=CINZA, pad=10)
+    ax.set_title("Recall: HistGradientBoosting", fontsize=14, color=CINZA, pad=10)
     fig.tight_layout()
     salvar(fig, "fig_equidade.png")
 
